@@ -1,9 +1,9 @@
 const express = require('express');
-const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 
 const app = express();
@@ -12,30 +12,39 @@ const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('he
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@morenet.co.za';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'changeme';
 
-// ── Database ─────────────────────────────────────────────
-const dataDir = process.env.DATA_DIR || '/app/data';
-const fs = require('fs');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-const db = new Database(`${dataDir}/nex.db`);
-db.pragma('journal_mode = WAL');
+// ── Simple JSON-based user store ─────────────────────────
+const DATA_FILE = process.env.DATA_FILE || '/app/data/users.json';
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    name TEXT,
-    role TEXT DEFAULT 'user',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_login DATETIME
-  )
-`);
+function loadUsers() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    }
+  } catch (e) {
+    console.error('Error loading users:', e.message);
+  }
+  return [];
+}
 
-// Seed admin if not exists
-const adminExists = db.prepare('SELECT id FROM users WHERE email = ?').get(ADMIN_EMAIL);
-if (!adminExists) {
-  const hash = bcrypt.hashSync(ADMIN_PASS, 10);
-  db.prepare('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)').run(ADMIN_EMAIL, hash, 'Admin', 'admin');
+function saveUsers(users) {
+  const dir = path.dirname(DATA_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
+}
+
+// Initialize with admin user if empty
+let users = loadUsers();
+if (!users.find(u => u.email === ADMIN_EMAIL)) {
+  users.push({
+    id: 1,
+    email: ADMIN_EMAIL,
+    password: bcrypt.hashSync(ADMIN_PASS, 10),
+    name: 'Admin',
+    role: 'admin',
+    created_at: new Date().toISOString(),
+    last_login: null
+  });
+  saveUsers(users);
   console.log(`Admin user created: ${ADMIN_EMAIL}`);
 }
 
@@ -62,8 +71,12 @@ function adminMiddleware(req, res, next) {
   next();
 }
 
-// ── Health Check (no auth) ───────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+// ── Health Check ─────────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok', port: PORT }));
+
+// ── Public assets for login page ─────────────────────────
+app.get('/login/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'logo.png')));
+app.get('/login/nex.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'nex.png')));
 
 // ── Auth Routes ──────────────────────────────────────────
 app.get('/login', (req, res) => {
@@ -74,12 +87,13 @@ app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase().trim());
+  const user = users.find(u => u.email === email.toLowerCase().trim());
   if (!user || !bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
-  db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
+  user.last_login = new Date().toISOString();
+  saveUsers(users);
 
   const token = jwt.sign(
     { id: user.id, email: user.email, name: user.name, role: user.role },
@@ -91,7 +105,7 @@ app.post('/api/login', (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000
   });
 
   res.json({ success: true, name: user.name, role: user.role });
@@ -104,44 +118,42 @@ app.post('/api/logout', (req, res) => {
 
 // ── Admin Routes ─────────────────────────────────────────
 app.get('/api/users', authMiddleware, adminMiddleware, (req, res) => {
-  const users = db.prepare('SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at').all();
-  res.json(users);
+  const safeUsers = users.map(u => ({
+    id: u.id, email: u.email, name: u.name, role: u.role,
+    created_at: u.created_at, last_login: u.last_login
+  }));
+  res.json(safeUsers);
 });
 
 app.post('/api/users', authMiddleware, adminMiddleware, (req, res) => {
   const { email, password, name, role } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-  try {
-    const hash = bcrypt.hashSync(password, 10);
-    const result = db.prepare('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)').run(
-      email.toLowerCase().trim(), hash, name || '', role || 'user'
-    );
-    res.json({ success: true, id: result.lastInsertRowid });
-  } catch (e) {
-    if (e.message.includes('UNIQUE')) return res.status(409).json({ error: 'Email already exists' });
-    res.status(500).json({ error: e.message });
+  if (users.find(u => u.email === email.toLowerCase().trim())) {
+    return res.status(409).json({ error: 'Email already exists' });
   }
+
+  const newUser = {
+    id: Math.max(...users.map(u => u.id), 0) + 1,
+    email: email.toLowerCase().trim(),
+    password: bcrypt.hashSync(password, 10),
+    name: name || '',
+    role: role || 'user',
+    created_at: new Date().toISOString(),
+    last_login: null
+  };
+  users.push(newUser);
+  saveUsers(users);
+  res.json({ success: true, id: newUser.id });
 });
 
 app.delete('/api/users/:id', authMiddleware, adminMiddleware, (req, res) => {
   const userId = parseInt(req.params.id);
   if (userId === req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
-  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  users = users.filter(u => u.id !== userId);
+  saveUsers(users);
   res.json({ success: true });
 });
-
-app.put('/api/users/:id/password', authMiddleware, adminMiddleware, (req, res) => {
-  const { password } = req.body;
-  if (!password) return res.status(400).json({ error: 'Password required' });
-  const hash = bcrypt.hashSync(password, 10);
-  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hash, parseInt(req.params.id));
-  res.json({ success: true });
-});
-
-// ── Public assets for login page ─────────────────────────
-app.get('/login/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'logo.png')));
-app.get('/login/nex.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'nex.png')));
 
 // ── Protected App ────────────────────────────────────────
 app.get('/', authMiddleware, (req, res) => {
@@ -152,7 +164,6 @@ app.get('/api/me', authMiddleware, (req, res) => {
   res.json(req.user);
 });
 
-// Static files (logo, nex avatar) — protected
 app.use(authMiddleware, express.static(path.join(__dirname, 'public')));
 
 // ── Start ────────────────────────────────────────────────
