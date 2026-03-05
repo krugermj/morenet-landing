@@ -13,7 +13,10 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@morenet.co.za';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'changeme';
 
 // ── Database ─────────────────────────────────────────────
-const db = new Database('/data/nex.db');
+const dataDir = process.env.DATA_DIR || '/app/data';
+const fs = require('fs');
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+const db = new Database(`${dataDir}/nex.db`);
 db.pragma('journal_mode = WAL');
 
 db.exec(`
