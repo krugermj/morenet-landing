@@ -59,6 +59,9 @@ function adminMiddleware(req, res, next) {
   next();
 }
 
+// ── Health Check (no auth) ───────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 // ── Auth Routes ──────────────────────────────────────────
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'login.html'));
