@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoreNET — Internet Solutions</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #1a1a2e;
+            background: #0f0f23;
+            min-height: 100vh;
+        }
+        
+        /* Hero */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 2rem;
+            background: linear-gradient(135deg, #0f0f23 0%, #16213e 50%, #0f3460 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 210, 255, 0.05) 0%, transparent 50%);
+            animation: pulse 8s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+        
+        .hero-content { position: relative; z-index: 1; max-width: 800px; }
+        
+        .logo {
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 0.5rem;
+            letter-spacing: -1px;
+        }
+        
+        .logo span { color: #00d2ff; }
+        
+        .tagline {
+            font-size: 1.25rem;
+            color: #8892b0;
+            margin-bottom: 2.5rem;
+            line-height: 1.6;
+        }
+        
+        .cta-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        
+        .btn {
+            padding: 0.875rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #00d2ff, #0077b6);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 210, 255, 0.4);
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: #00d2ff;
+            border: 2px solid #00d2ff;
+        }
+        
+        .btn-outline:hover {
+            background: rgba(0, 210, 255, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        /* Features */
+        .features {
+            padding: 5rem 2rem;
+            background: #1a1a2e;
+        }
+        
+        .features-grid {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+        
+        .feature-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(0, 210, 255, 0.3);
+            transform: translateY(-4px);
+        }
+        
+        .feature-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+        
+        .feature-card h3 {
+            color: #fff;
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .feature-card p {
+            color: #8892b0;
+            line-height: 1.6;
+        }
+        
+        /* Footer */
+        footer {
+            background: #0f0f23;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 2rem;
+            text-align: center;
+            color: #5a6380;
+            font-size: 0.875rem;
+        }
+        
+        footer a { color: #00d2ff; text-decoration: none; }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 20px;
+            color: #00ff88;
+            font-size: 0.8rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            animation: blink 2s ease-in-out infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+    <section class="hero">
+        <div class="hero-content">
+            <h1 class="logo">More<span>NET</span></h1>
+            <p class="tagline">
+                Fast, reliable internet solutions for businesses across South Africa.<br>
+                Connecting Mpumalanga and beyond since day one.
+            </p>
+            <div class="cta-group">
+                <a href="mailto:support@morenet.co.za" class="btn btn-primary">Get Connected</a>
+                <a href="tel:+27176310060" class="btn btn-outline">Call Us</a>
+            </div>
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                All systems operational
+            </div>
+        </div>
+    </section>
+    
+    <section class="features">
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>Fibre & Wireless</h3>
+                <p>High-speed internet tailored to your business. From FTTH to point-to-point wireless — we've got coverage.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <h3>24/7 Support</h3>
+                <p>Local team, local knowledge. When something breaks, we're already on it — often before you even notice.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🚀</div>
+                <h3>Business Solutions</h3>
+                <p>VoIP, hosting, network management, and custom IT solutions designed for SMEs that need to move fast.</p>
+            </div>
+        </div>
+    </section>
+    
+    <footer>
+        <p>&copy; 2026 MoreNET Internet Solutions. Built with ⚡ by Claudius.</p>
+        <p><a href="mailto:support@morenet.co.za">support@morenet.co.za</a> · <a href="tel:+27176310060">017 631 0060</a></p>
+    </footer>
+</body>
+</html>
