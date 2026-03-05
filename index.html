@@ -46,12 +46,20 @@
         
         .hero-content { position: relative; z-index: 1; max-width: 800px; }
         
+        .logo-img {
+            width: 280px;
+            height: auto;
+            margin-bottom: 1.5rem;
+            filter: drop-shadow(0 4px 20px rgba(0, 210, 255, 0.2));
+        }
+        
         .logo {
             font-size: 3.5rem;
             font-weight: 800;
             color: #fff;
             margin-bottom: 0.5rem;
             letter-spacing: -1px;
+            display: none;
         }
         
         .logo span { color: #00d2ff; }
@@ -181,6 +189,7 @@
 <body>
     <section class="hero">
         <div class="hero-content">
+            <img src="logo.png" alt="MoreNET" class="logo-img">
             <h1 class="logo">More<span>NET</span></h1>
             <p class="tagline">
                 Fast, reliable internet solutions for businesses across South Africa.<br>
