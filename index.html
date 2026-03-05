@@ -46,6 +46,54 @@
         
         .hero-content { position: relative; z-index: 1; max-width: 800px; }
         
+        /* NEX Intro Section */
+        .nex-intro {
+            padding: 4rem 2rem 2rem;
+            background: linear-gradient(180deg, #0a0a1a 0%, #0f0f23 100%);
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .nex-content { max-width: 700px; }
+        
+        .nex-avatar {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid rgba(0, 210, 255, 0.4);
+            box-shadow: 0 0 30px rgba(0, 210, 255, 0.15), 0 0 60px rgba(0, 210, 255, 0.05);
+            margin-bottom: 1.5rem;
+            animation: glow 4s ease-in-out infinite;
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 30px rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); }
+            50% { box-shadow: 0 0 40px rgba(0, 210, 255, 0.3); border-color: rgba(0, 210, 255, 0.7); }
+        }
+        
+        .nex-heading {
+            font-size: 2.8rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.5px;
+        }
+        
+        .nex-heading span {
+            color: #00d2ff;
+            text-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+        }
+        
+        .nex-subtitle {
+            font-size: 1.15rem;
+            color: #8892b0;
+            line-height: 1.6;
+            font-style: italic;
+        }
+        
         .logo-img {
             width: 280px;
             height: auto;
@@ -187,6 +235,14 @@
     </style>
 </head>
 <body>
+    <section class="nex-intro">
+        <div class="nex-content">
+            <img src="nex.png" alt="NEX" class="nex-avatar">
+            <h1 class="nex-heading">Welcome to <span>NEX</span></h1>
+            <p class="nex-subtitle">Your friendly NEXt level Client Insights Specialist, here to help</p>
+        </div>
+    </section>
+
     <section class="hero">
         <div class="hero-content">
             <img src="logo.png" alt="MoreNET" class="logo-img">
