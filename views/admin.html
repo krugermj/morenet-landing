@@ -14,7 +14,6 @@
             color: #e0e0e0;
         }
 
-        /* Top Bar */
         .top-bar {
             position: fixed; top: 0; left: 0; right: 0; z-index: 100;
             display: flex; justify-content: space-between; align-items: center;
@@ -30,43 +29,31 @@
 
         .nav-link {
             color: #8892b0; text-decoration: none; font-size: 0.85rem;
-            padding: 0.4rem 0.8rem; border-radius: 6px;
-            transition: all 0.2s;
+            padding: 0.4rem 0.8rem; border-radius: 6px; transition: all 0.2s;
         }
         .nav-link:hover { color: #00d2ff; background: rgba(0, 210, 255, 0.08); }
         .nav-link.active { color: #00d2ff; }
+        .nav-link.logout:hover { color: #ff6b6b; background: rgba(255, 59, 48, 0.08); }
 
-        /* Content */
-        .content {
-            max-width: 900px; margin: 0 auto;
-            padding: 5.5rem 1.5rem 2rem;
-        }
+        .content { max-width: 900px; margin: 0 auto; padding: 5.5rem 1.5rem 2rem; }
 
-        h1 {
-            font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 0.25rem;
-        }
+        h1 { font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 0.25rem; }
         h1 span { color: #00d2ff; }
         .page-subtitle { color: #8892b0; font-size: 0.9rem; margin-bottom: 2rem; }
 
-        /* Cards */
         .card {
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
+            border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
 
         .card-title {
             font-size: 1.1rem; font-weight: 700; color: #fff;
-            margin-bottom: 1rem;
-            display: flex; align-items: center; gap: 0.5rem;
+            margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;
         }
-
         .card-title .icon { color: #00d2ff; }
 
-        /* Table */
         .user-table { width: 100%; border-collapse: collapse; }
         .user-table th {
             text-align: left; padding: 0.6rem 0.75rem;
@@ -77,6 +64,7 @@
         .user-table td {
             padding: 0.7rem 0.75rem; font-size: 0.9rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            vertical-align: middle;
         }
         .user-table tr:hover td { background: rgba(0, 210, 255, 0.03); }
 
@@ -89,7 +77,6 @@
 
         .last-login { color: #5a6380; font-size: 0.8rem; }
 
-        /* Buttons */
         .btn {
             padding: 0.5rem 1rem; border: none; border-radius: 8px;
             font-size: 0.85rem; font-weight: 600; cursor: pointer;
@@ -100,21 +87,13 @@
             box-shadow: 0 4px 12px rgba(0, 210, 255, 0.25);
         }
         .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 210, 255, 0.35); }
-        .btn-danger {
-            background: rgba(255, 59, 48, 0.15); color: #ff6b6b;
-            border: 1px solid rgba(255, 59, 48, 0.2);
-        }
+        .btn-danger { background: rgba(255, 59, 48, 0.15); color: #ff6b6b; border: 1px solid rgba(255, 59, 48, 0.2); }
         .btn-danger:hover { background: rgba(255, 59, 48, 0.25); }
-        .btn-ghost {
-            background: rgba(255, 255, 255, 0.06); color: #c8d6e5;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
+        .btn-ghost { background: rgba(255, 255, 255, 0.06); color: #c8d6e5; border: 1px solid rgba(255, 255, 255, 0.1); }
         .btn-ghost:hover { background: rgba(255, 255, 255, 0.1); }
         .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+        .btn-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
-        .btn-row { display: flex; gap: 0.5rem; }
-
-        /* Forms */
         .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
         .form-group { flex: 1; min-width: 180px; }
         .form-group label {
@@ -129,12 +108,22 @@
             font-size: 0.9rem; font-family: inherit; outline: none;
             transition: border-color 0.3s;
         }
-        .form-group input:focus, .form-group select:focus {
-            border-color: rgba(0, 210, 255, 0.5);
-        }
+        .form-group input:focus, .form-group select:focus { border-color: rgba(0, 210, 255, 0.5); }
         .form-group select option { background: #16213e; }
 
-        /* Messages */
+        .inline-input {
+            background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 210, 255, 0.3);
+            border-radius: 6px; color: #fff; padding: 0.3rem 0.5rem;
+            font-size: 0.85rem; font-family: inherit; outline: none; width: 100%;
+        }
+        .inline-input:focus { border-color: rgba(0, 210, 255, 0.6); }
+        .inline-select {
+            background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 210, 255, 0.3);
+            border-radius: 6px; color: #fff; padding: 0.3rem 0.4rem;
+            font-size: 0.8rem; font-family: inherit; outline: none;
+        }
+        .inline-select option { background: #16213e; }
+
         .msg {
             padding: 0.7rem 1rem; border-radius: 8px;
             font-size: 0.85rem; margin-bottom: 1rem; display: none;
@@ -142,7 +131,22 @@
         .msg-success { background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.2); color: #00ff88; }
         .msg-error { background: rgba(255, 59, 48, 0.1); border: 1px solid rgba(255, 59, 48, 0.3); color: #ff6b6b; }
 
-        /* Responsive */
+        /* Modal overlay */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7); z-index: 200;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #16213e; border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px; padding: 2rem; width: 100%; max-width: 440px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+        }
+        .modal h2 { font-size: 1.2rem; color: #fff; margin-bottom: 1rem; }
+        .modal .form-group { margin-bottom: 1rem; }
+        .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+
         @media (max-width: 600px) {
             .content { padding: 5rem 1rem 1.5rem; }
             .form-row { flex-direction: column; }
@@ -157,6 +161,7 @@
         <div class="top-right">
             <a href="/" class="nav-link">← Dashboard</a>
             <a href="/admin" class="nav-link active">Admin</a>
+            <a href="#" onclick="logout()" class="nav-link logout">Logout</a>
             <img src="/admin/nex.png" alt="NEX" class="top-avatar">
         </div>
     </header>
@@ -242,10 +247,49 @@
         </div>
     </div>
 
+    <!-- Edit User Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <h2>✏️ Edit User</h2>
+            <form id="editUserForm">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="editName" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="editEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="editRole">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>New Password <span style="color:#5a6380;font-weight:400;">(leave blank to keep current)</span></label>
+                    <input type="password" id="editPassword" minlength="8" placeholder="••••••••">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         let currentUser = null;
+        let allUsers = [];
 
-        // ── Helpers ──────────────────────────────────────
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
         function showMsg(id, text, duration = 4000) {
             const el = document.getElementById(id);
             el.textContent = text;
@@ -269,58 +313,53 @@
             return data;
         }
 
-        // ── Load Current User ────────────────────────────
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+
+        // ── Load ─────────────────────────────────────────
         async function loadMe() {
             currentUser = await api('GET', '/api/me');
         }
 
-        // ── Load Users ───────────────────────────────────
         async function loadUsers() {
-            const users = await api('GET', '/api/users');
+            allUsers = await api('GET', '/api/users');
             const tbody = document.getElementById('usersBody');
-            document.getElementById('userCount').textContent = `(${users.length})`;
+            document.getElementById('userCount').textContent = `(${allUsers.length})`;
 
-            tbody.innerHTML = users.map(u => `
-                <tr data-id="${u.id}">
+            tbody.innerHTML = allUsers.map(u => `
+                <tr>
                     <td>${esc(u.name || '—')}</td>
                     <td>${esc(u.email)}</td>
                     <td><span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">${u.role}</span></td>
                     <td class="hide-mobile"><span class="last-login">${formatDate(u.last_login)}</span></td>
                     <td>
                         <div class="btn-row">
-                            <button class="btn btn-ghost btn-sm" onclick="resetPassword(${u.id}, '${esc(u.email)}')">Reset PW</button>
-                            ${u.id !== currentUser.id ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id}, '${esc(u.email)}')">Delete</button>` : ''}
+                            <button class="btn btn-ghost btn-sm" onclick="openEditModal(${u.id})">Edit</button>
+                            ${u.id !== currentUser.id
+                                ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id}, '${esc(u.email)}')">Delete</button>`
+                                : '<span style="color:#5a6380;font-size:0.75rem;">(you)</span>'}
                         </div>
                     </td>
                 </tr>
             `).join('');
         }
 
-        function esc(s) {
-            const d = document.createElement('div');
-            d.textContent = s;
-            return d.innerHTML;
-        }
-
-        // ── Change Password ──────────────────────────────
+        // ── Change Own Password ──────────────────────────
         document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const curr = document.getElementById('currentPassword').value;
             const newPw = document.getElementById('newPassword').value;
             const confirm = document.getElementById('confirmPassword').value;
 
-            if (newPw !== confirm) {
-                showMsg('pwError', 'New passwords do not match');
-                return;
-            }
+            if (newPw !== confirm) { showMsg('pwError', 'New passwords do not match'); return; }
 
             try {
                 await api('POST', '/api/change-password', { currentPassword: curr, newPassword: newPw });
-                showMsg('pwSuccess', 'Password updated successfully! ✓');
+                showMsg('pwSuccess', 'Password updated ✓');
                 e.target.reset();
-            } catch (err) {
-                showMsg('pwError', err.message);
-            }
+            } catch (err) { showMsg('pwError', err.message); }
         });
 
         // ── Create User ─────────────────────────────────
@@ -336,44 +375,76 @@
                 showMsg('createSuccess', `User ${result.email} created ✓`);
                 e.target.reset();
                 loadUsers();
-            } catch (err) {
-                showMsg('createError', err.message);
-            }
+            } catch (err) { showMsg('createError', err.message); }
         });
 
-        // ── Reset Password ───────────────────────────────
-        async function resetPassword(id, email) {
-            const newPw = prompt(`Enter new password for ${email}:`);
-            if (!newPw) return;
-            if (newPw.length < 8) {
-                showMsg('tableError', 'Password must be at least 8 characters');
-                return;
-            }
-            try {
-                await api('PUT', `/api/users/${id}`, { password: newPw });
-                showMsg('tableSuccess', `Password reset for ${email} ✓`);
-            } catch (err) {
-                showMsg('tableError', err.message);
-            }
+        // ── Edit User Modal ──────────────────────────────
+        function openEditModal(id) {
+            const u = allUsers.find(u => u.id === id);
+            if (!u) return;
+            document.getElementById('editId').value = u.id;
+            document.getElementById('editName').value = u.name || '';
+            document.getElementById('editEmail').value = u.email;
+            document.getElementById('editRole').value = u.role;
+            document.getElementById('editPassword').value = '';
+
+            // Prevent self-role-change
+            const roleSelect = document.getElementById('editRole');
+            roleSelect.disabled = (u.id === currentUser.id);
+
+            document.getElementById('editModal').classList.add('active');
         }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+
+        // Close modal on overlay click
+        document.getElementById('editModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeEditModal();
+        });
+
+        // Close modal on Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeEditModal();
+        });
+
+        document.getElementById('editUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editId').value;
+            const payload = {
+                name: document.getElementById('editName').value,
+                email: document.getElementById('editEmail').value,
+                role: document.getElementById('editRole').value,
+            };
+            const pw = document.getElementById('editPassword').value;
+            if (pw) {
+                if (pw.length < 8) { alert('Password must be at least 8 characters'); return; }
+                payload.password = pw;
+            }
+
+            try {
+                await api('PUT', `/api/users/${id}`, payload);
+                closeEditModal();
+                showMsg('tableSuccess', 'User updated ✓');
+                loadUsers();
+            } catch (err) {
+                alert(err.message);
+            }
+        });
 
         // ── Delete User ──────────────────────────────────
         async function deleteUser(id, email) {
             if (!confirm(`Delete user ${email}? This cannot be undone.`)) return;
             try {
                 await api('DELETE', `/api/users/${id}`);
-                showMsg('tableSuccess', `User ${email} deleted`);
+                showMsg('tableSuccess', `${email} deleted`);
                 loadUsers();
-            } catch (err) {
-                showMsg('tableError', err.message);
-            }
+            } catch (err) { showMsg('tableError', err.message); }
         }
 
         // ── Init ─────────────────────────────────────────
-        loadMe().then(loadUsers).catch(err => {
-            console.error(err);
-            window.location.href = '/login';
-        });
+        loadMe().then(loadUsers).catch(() => window.location.href = '/login');
     </script>
 </body>
 </html>

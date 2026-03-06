@@ -279,7 +279,11 @@
 <body>
     <header class="top-bar">
         <img src="logo.png" alt="MoreNET" class="top-logo">
-        <img src="nex.png" alt="NEX" class="top-avatar">
+        <div style="display:flex;align-items:center;gap:1rem;">
+            <a href="/admin" id="adminLink" style="display:none;color:#8892b0;text-decoration:none;font-size:0.85rem;padding:0.4rem 0.8rem;border-radius:6px;transition:all 0.2s;" onmouseover="this.style.color='#00d2ff';this.style.background='rgba(0,210,255,0.08)'" onmouseout="this.style.color='#8892b0';this.style.background='transparent'">Admin</a>
+            <a href="#" onclick="logout()" style="color:#8892b0;text-decoration:none;font-size:0.85rem;padding:0.4rem 0.8rem;border-radius:6px;transition:all 0.2s;" onmouseover="this.style.color='#ff6b6b';this.style.background='rgba(255,59,48,0.08)'" onmouseout="this.style.color='#8892b0';this.style.background='transparent'">Logout</a>
+            <img src="nex.png" alt="NEX" class="top-avatar">
+        </div>
     </header>
 
     <main class="main">
@@ -383,6 +387,16 @@
 
         sendBtn.addEventListener('click', handleSend);
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSend(); });
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+
+        // Show admin link if user is admin
+        fetch('/api/me').then(r => r.json()).then(u => {
+            if (u.role === 'admin') document.getElementById('adminLink').style.display = 'inline';
+        }).catch(() => {});
     </script>
 </body>
 </html>
