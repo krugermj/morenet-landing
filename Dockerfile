@@ -1,5 +1,8 @@
-FROM nginx:alpine
-COPY public/index.html /usr/share/nginx/html/index.html
-COPY public/logo.png /usr/share/nginx/html/logo.png
-COPY public/nex.png /usr/share/nginx/html/nex.png
+FROM node:20-alpine
+WORKDIR /app
+COPY package.json ./
+RUN npm install --production
+COPY . .
+ENV PORT=80
 EXPOSE 80
+CMD ["node", "server.js"]
