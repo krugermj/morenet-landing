@@ -1,5 +1,4 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const path = require('path');
@@ -9,10 +8,38 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+const APP_URL = process.env.APP_URL || 'https://nex.morenet.co.za';
+
+// ── Authentik OIDC Config ────────────────────────────────
+const AUTHENTIK_URL = process.env.AUTHENTIK_URL || '';
+const AUTHENTIK_CLIENT_ID = process.env.AUTHENTIK_CLIENT_ID || '';
+const AUTHENTIK_CLIENT_SECRET = process.env.AUTHENTIK_CLIENT_SECRET || '';
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'marius@morenet.co.za').split(',').map(e => e.trim().toLowerCase());
+const ADMIN_GROUP = process.env.ADMIN_GROUP || 'NEX Admins';
+const OIDC_ENABLED = !!(AUTHENTIK_URL && AUTHENTIK_CLIENT_ID && AUTHENTIK_CLIENT_SECRET);
+
+// OIDC endpoints
+const OIDC_AUTH_URL = `${AUTHENTIK_URL}/application/o/authorize/`;
+const OIDC_TOKEN_URL = `${AUTHENTIK_URL}/application/o/token/`;
+const OIDC_USERINFO_URL = `${AUTHENTIK_URL}/application/o/userinfo/`;
+const OIDC_CALLBACK_URL = `${APP_URL}/auth/callback`;
+
+if (OIDC_ENABLED) {
+  console.log(`Authentik OIDC enabled: ${AUTHENTIK_URL}`);
+} else {
+  console.log('Authentik OIDC not configured — local auth fallback active');
+}
+
+// ── Local Auth Fallback (dev/testing only) ───────────────
+const LOCAL_AUTH_ENABLED = !OIDC_ENABLED;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@morenet.co.za';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'changeme';
+let bcrypt = null;
+if (LOCAL_AUTH_ENABLED) {
+  try { bcrypt = require('bcryptjs'); } catch { console.warn('bcryptjs not available — local auth disabled'); }
+}
 
-// ── Simple JSON-based user store ─────────────────────────
+// ── User Store ───────────────────────────────────────────
 const DATA_FILE = process.env.DATA_FILE || '/app/data/users.json';
 
 function loadUsers() {
@@ -20,9 +47,7 @@ function loadUsers() {
     if (fs.existsSync(DATA_FILE)) {
       return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     }
-  } catch (e) {
-    console.error('Error loading users:', e.message);
-  }
+  } catch (e) { console.error('Error loading users:', e.message); }
   return [];
 }
 
@@ -32,54 +57,37 @@ function saveUsers(users) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
 }
 
-// Initialize with admin user ONLY if no users exist at all
 let users = loadUsers();
-if (users.length === 0) {
+
+// Seed local admin for fallback mode
+if (LOCAL_AUTH_ENABLED && bcrypt && !users.find(u => u.email === ADMIN_EMAIL)) {
   users.push({
-    id: 1,
-    email: ADMIN_EMAIL,
-    password: bcrypt.hashSync(ADMIN_PASS, 10),
-    name: 'Admin',
-    role: 'admin',
-    created_at: new Date().toISOString(),
-    last_login: null
+    id: 1, email: ADMIN_EMAIL, password: bcrypt.hashSync(ADMIN_PASS, 10),
+    name: 'Admin', role: 'admin', auth: 'local',
+    created_at: new Date().toISOString(), last_login: null
   });
   saveUsers(users);
-  console.log(`Initial admin user created: ${ADMIN_EMAIL}`);
-} else {
-  console.log(`Loaded ${users.length} existing users from store.`);
+  console.log(`Local admin seeded: ${ADMIN_EMAIL}`);
 }
 
 // ── Rate Limiter ─────────────────────────────────────────
-const loginAttempts = new Map(); // ip -> { count, firstAttempt, lockedUntil }
-const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minute lockout
+const loginAttempts = new Map();
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000;
+const MAX_ATTEMPTS = 10;
+const LOCKOUT_DURATION = 15 * 60 * 1000;
 
 function rateLimitCheck(ip) {
   const now = Date.now();
   const record = loginAttempts.get(ip);
-
   if (!record) return { allowed: true };
-
-  // If locked out, check if lockout expired
   if (record.lockedUntil && now < record.lockedUntil) {
-    const remaining = Math.ceil((record.lockedUntil - now) / 1000 / 60);
-    return { allowed: false, remaining };
+    return { allowed: false, remaining: Math.ceil((record.lockedUntil - now) / 1000 / 60) };
   }
-
-  // If window expired, reset
-  if (now - record.firstAttempt > RATE_LIMIT_WINDOW) {
-    loginAttempts.delete(ip);
-    return { allowed: true };
-  }
-
+  if (now - record.firstAttempt > RATE_LIMIT_WINDOW) { loginAttempts.delete(ip); return { allowed: true }; }
   if (record.count >= MAX_ATTEMPTS) {
     record.lockedUntil = now + LOCKOUT_DURATION;
-    const remaining = Math.ceil(LOCKOUT_DURATION / 1000 / 60);
-    return { allowed: false, remaining };
+    return { allowed: false, remaining: Math.ceil(LOCKOUT_DURATION / 1000 / 60) };
   }
-
   return { allowed: true };
 }
 
@@ -90,32 +98,66 @@ function rateLimitRecord(ip) {
   loginAttempts.set(ip, record);
 }
 
-function rateLimitReset(ip) {
-  loginAttempts.delete(ip);
-}
+function rateLimitReset(ip) { loginAttempts.delete(ip); }
 
-// Clean up stale entries every 30 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [ip, record] of loginAttempts) {
-    if (now - record.firstAttempt > RATE_LIMIT_WINDOW * 2) {
-      loginAttempts.delete(ip);
-    }
+    if (now - record.firstAttempt > RATE_LIMIT_WINDOW * 2) loginAttempts.delete(ip);
   }
 }, 30 * 60 * 1000);
 
 // ── Middleware ────────────────────────────────────────────
-app.set('trust proxy', true); // trust Traefik/Coolify proxy for real IP
+app.set('trust proxy', true);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+function resolveRole(email, authentikGroups) {
+  // Check Authentik groups first
+  if (authentikGroups && authentikGroups.includes(ADMIN_GROUP)) return 'admin';
+  // Check admin email list
+  if (ADMIN_EMAILS.includes(email.toLowerCase())) return 'admin';
+  // Check local store
+  users = loadUsers();
+  const existing = users.find(u => u.email === email.toLowerCase());
+  if (existing) return existing.role;
+  return 'user';
+}
+
+function upsertUser(email, name, groups, authMethod) {
+  users = loadUsers();
+  let user = users.find(u => u.email === email.toLowerCase());
+  const role = resolveRole(email, groups);
+
+  if (user) {
+    user.name = name || user.name;
+    user.role = role;
+    user.last_login = new Date().toISOString();
+    user.auth = authMethod;
+    if (groups) user.groups = groups;
+  } else {
+    user = {
+      id: Math.max(...users.map(u => u.id), 0) + 1,
+      email: email.toLowerCase().trim(),
+      name: name || '',
+      role,
+      auth: authMethod,
+      groups: groups || [],
+      created_at: new Date().toISOString(),
+      last_login: new Date().toISOString()
+    };
+    users.push(user);
+  }
+  saveUsers(users);
+  return user;
+}
 
 function authMiddleware(req, res, next) {
   const token = req.cookies.nex_token;
   if (!token) return res.redirect('/login');
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
     res.clearCookie('nex_token');
@@ -127,8 +169,7 @@ function apiAuthMiddleware(req, res, next) {
   const token = req.cookies.nex_token;
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
     res.clearCookie('nex_token');
@@ -141,140 +182,218 @@ function adminMiddleware(req, res, next) {
   next();
 }
 
-// ── Health Check ─────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ status: 'ok', port: PORT }));
-
-// ── Public assets for login page ─────────────────────────
-app.get('/login/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'logo.png')));
-app.get('/login/nex.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'nex.png')));
-
-// ── Auth Routes ──────────────────────────────────────────
-app.get('/login', (req, res) => {
-  // If already logged in, redirect to home
-  const token = req.cookies.nex_token;
-  if (token) {
-    try {
-      jwt.verify(token, JWT_SECRET);
-      return res.redirect('/');
-    } catch {}
-  }
-  res.sendFile(path.join(__dirname, 'views', 'login.html'));
-});
-
-app.post('/api/login', (req, res) => {
-  const ip = req.ip;
-
-  // Rate limit check
-  const rateCheck = rateLimitCheck(ip);
-  if (!rateCheck.allowed) {
-    return res.status(429).json({
-      error: `Too many login attempts. Try again in ${rateCheck.remaining} minute${rateCheck.remaining > 1 ? 's' : ''}.`
-    });
-  }
-
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-
-  // Reload users from disk (in case another instance changed it)
-  users = loadUsers();
-
-  const user = users.find(u => u.email === email.toLowerCase().trim());
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    rateLimitRecord(ip);
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  // Successful login — reset rate limit
-  rateLimitReset(ip);
-
-  user.last_login = new Date().toISOString();
-  saveUsers(users);
-
+function issueToken(res, user) {
   const token = jwt.sign(
     { id: user.id, email: user.email, name: user.name, role: user.role },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
-
   res.cookie('nex_token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
+}
 
-  res.json({ success: true, name: user.name, role: user.role });
+// ── Health Check ─────────────────────────────────────────
+app.get('/health', (req, res) => res.json({
+  status: 'ok', port: PORT, auth: OIDC_ENABLED ? 'authentik' : 'local'
+}));
+
+// ── Public assets ────────────────────────────────────────
+app.get('/login/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'logo.png')));
+app.get('/login/nex.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'nex.png')));
+app.get('/admin/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'logo.png')));
+app.get('/admin/nex.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'nex.png')));
+
+// ── Login Page ───────────────────────────────────────────
+app.get('/login', (req, res) => {
+  const token = req.cookies.nex_token;
+  if (token) {
+    try { jwt.verify(token, JWT_SECRET); return res.redirect('/'); } catch {}
+  }
+
+  if (OIDC_ENABLED) {
+    // Show Authentik login button
+    res.sendFile(path.join(__dirname, 'views', 'login.html'));
+  } else {
+    // Show local login form (dev fallback)
+    res.sendFile(path.join(__dirname, 'views', 'login-local.html'));
+  }
 });
 
+// ── Authentik OIDC Flow ──────────────────────────────────
+app.get('/auth/start', (req, res) => {
+  if (!OIDC_ENABLED) return res.redirect('/login');
+
+  const ip = req.ip;
+  const rateCheck = rateLimitCheck(ip);
+  if (!rateCheck.allowed) {
+    return res.status(429).send(`Too many attempts. Try again in ${rateCheck.remaining} minutes.`);
+  }
+
+  const state = crypto.randomBytes(16).toString('hex');
+  const nonce = crypto.randomBytes(16).toString('hex');
+
+  // Store state + nonce in a short-lived cookie
+  res.cookie('oidc_state', JSON.stringify({ state, nonce }), {
+    httpOnly: true, secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax', maxAge: 10 * 60 * 1000 // 10 minutes
+  });
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: AUTHENTIK_CLIENT_ID,
+    redirect_uri: OIDC_CALLBACK_URL,
+    scope: 'openid email profile',
+    state,
+    nonce,
+  });
+
+  res.redirect(`${OIDC_AUTH_URL}?${params}`);
+});
+
+app.get('/auth/callback', async (req, res) => {
+  if (!OIDC_ENABLED) return res.redirect('/login');
+
+  const ip = req.ip;
+  const rateCheck = rateLimitCheck(ip);
+  if (!rateCheck.allowed) {
+    return res.status(429).send(`Too many attempts. Try again in ${rateCheck.remaining} minutes.`);
+  }
+
+  const { code, state } = req.query;
+  if (!code || !state) {
+    rateLimitRecord(ip);
+    return res.redirect('/login?error=missing_params');
+  }
+
+  // Verify state
+  let storedState;
+  try {
+    storedState = JSON.parse(req.cookies.oidc_state || '{}');
+  } catch { storedState = {}; }
+
+  if (state !== storedState.state) {
+    rateLimitRecord(ip);
+    return res.redirect('/login?error=invalid_state');
+  }
+
+  res.clearCookie('oidc_state');
+
+  try {
+    // Exchange code for tokens
+    const tokenRes = await fetch(OIDC_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: OIDC_CALLBACK_URL,
+        client_id: AUTHENTIK_CLIENT_ID,
+        client_secret: AUTHENTIK_CLIENT_SECRET,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      console.error('Token exchange failed:', tokenRes.status, await tokenRes.text());
+      rateLimitRecord(ip);
+      return res.redirect('/login?error=token_failed');
+    }
+
+    const tokenData = await tokenRes.json();
+
+    // Fetch userinfo
+    const userRes = await fetch(OIDC_USERINFO_URL, {
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
+    });
+
+    if (!userRes.ok) {
+      console.error('Userinfo failed:', userRes.status, await userRes.text());
+      rateLimitRecord(ip);
+      return res.redirect('/login?error=userinfo_failed');
+    }
+
+    const userInfo = await userRes.json();
+    const email = (userInfo.email || '').toLowerCase().trim();
+    const name = userInfo.name || userInfo.preferred_username || email.split('@')[0];
+    const groups = userInfo.groups || [];
+
+    if (!email) {
+      return res.redirect('/login?error=no_email');
+    }
+
+    // Upsert user and issue session token
+    const user = upsertUser(email, name, groups, 'authentik');
+    issueToken(res, user);
+    rateLimitReset(ip);
+
+    console.log(`OIDC login: ${email} (role: ${user.role})`);
+    res.redirect('/');
+
+  } catch (err) {
+    console.error('OIDC callback error:', err);
+    rateLimitRecord(ip);
+    return res.redirect('/login?error=server_error');
+  }
+});
+
+// ── Local Auth Fallback (dev only) ───────────────────────
+if (LOCAL_AUTH_ENABLED && bcrypt) {
+  app.post('/api/login', (req, res) => {
+    const ip = req.ip;
+    const rateCheck = rateLimitCheck(ip);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ error: `Too many attempts. Try again in ${rateCheck.remaining} minutes.` });
+    }
+
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+
+    users = loadUsers();
+    const user = users.find(u => u.email === email.toLowerCase().trim());
+    if (!user || !user.password || !bcrypt.compareSync(password, user.password)) {
+      rateLimitRecord(ip);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    user.last_login = new Date().toISOString();
+    saveUsers(users);
+    rateLimitReset(ip);
+    issueToken(res, user);
+    res.json({ success: true, name: user.name, role: user.role });
+  });
+}
+
+// ── Logout ───────────────────────────────────────────────
 app.post('/api/logout', (req, res) => {
   res.clearCookie('nex_token');
   res.json({ success: true });
 });
 
-// ── User Self-Service Routes ─────────────────────────────
-app.post('/api/change-password', apiAuthMiddleware, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: 'Current and new password required' });
-  }
-  if (newPassword.length < 8) {
-    return res.status(400).json({ error: 'New password must be at least 8 characters' });
-  }
-
-  users = loadUsers();
-  const user = users.find(u => u.id === req.user.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  if (!bcrypt.compareSync(currentPassword, user.password)) {
-    return res.status(401).json({ error: 'Current password is incorrect' });
-  }
-
-  user.password = bcrypt.hashSync(newPassword, 10);
-  saveUsers(users);
-
-  res.json({ success: true, message: 'Password updated successfully' });
+app.get('/logout', (req, res) => {
+  res.clearCookie('nex_token');
+  res.redirect('/login');
 });
 
-// ── Admin Routes ─────────────────────────────────────────
+// ── Admin API ────────────────────────────────────────────
 app.get('/admin', authMiddleware, adminMiddleware, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'admin.html'));
 });
 
-// Serve assets for admin page
-app.get('/admin/logo.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'logo.png')));
-app.get('/admin/nex.png', (req, res) => res.sendFile(path.join(__dirname, 'public', 'nex.png')));
+app.get('/api/auth-info', apiAuthMiddleware, (req, res) => {
+  res.json({ mode: OIDC_ENABLED ? 'authentik' : 'local', authentikUrl: AUTHENTIK_URL || null });
+});
 
 app.get('/api/users', apiAuthMiddleware, adminMiddleware, (req, res) => {
   users = loadUsers();
   const safeUsers = users.map(u => ({
     id: u.id, email: u.email, name: u.name, role: u.role,
+    auth: u.auth || 'local', groups: u.groups || [],
     created_at: u.created_at, last_login: u.last_login
   }));
   res.json(safeUsers);
-});
-
-app.post('/api/users', apiAuthMiddleware, adminMiddleware, (req, res) => {
-  const { email, password, name, role } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-
-  users = loadUsers();
-  if (users.find(u => u.email === email.toLowerCase().trim())) {
-    return res.status(409).json({ error: 'Email already exists' });
-  }
-
-  const newUser = {
-    id: Math.max(...users.map(u => u.id), 0) + 1,
-    email: email.toLowerCase().trim(),
-    password: bcrypt.hashSync(password, 10),
-    name: name || '',
-    role: role || 'user',
-    created_at: new Date().toISOString(),
-    last_login: null
-  };
-  users.push(newUser);
-  saveUsers(users);
-  res.json({ success: true, id: newUser.id, email: newUser.email });
 });
 
 app.put('/api/users/:id', apiAuthMiddleware, adminMiddleware, (req, res) => {
@@ -283,21 +402,14 @@ app.put('/api/users/:id', apiAuthMiddleware, adminMiddleware, (req, res) => {
   const user = users.find(u => u.id === userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const { name, email, role, password } = req.body;
+  const { name, role } = req.body;
   if (name !== undefined) user.name = name;
-  if (email !== undefined) user.email = email.toLowerCase().trim();
   if (role !== undefined) {
-    // Prevent demoting yourself
     if (userId === req.user.id && role !== 'admin') {
       return res.status(400).json({ error: 'Cannot remove your own admin role' });
     }
     user.role = role;
   }
-  if (password) {
-    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-    user.password = bcrypt.hashSync(password, 10);
-  }
-
   saveUsers(users);
   res.json({ success: true });
 });
@@ -324,5 +436,5 @@ app.use(authMiddleware, express.static(path.join(__dirname, 'public')));
 
 // ── Start ────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`NEX Portal running on port ${PORT}`);
+  console.log(`NEX Portal running on port ${PORT} [auth: ${OIDC_ENABLED ? 'Authentik OIDC' : 'local'}]`);
 });

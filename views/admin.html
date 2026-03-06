@@ -10,8 +10,7 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #0f0f23 0%, #16213e 50%, #0f3460 100%);
-            min-height: 100vh;
-            color: #e0e0e0;
+            min-height: 100vh; color: #e0e0e0;
         }
 
         .top-bar {
@@ -22,11 +21,9 @@
             backdrop-filter: blur(12px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
-
         .top-logo { height: 40px; }
         .top-right { display: flex; align-items: center; gap: 1rem; }
         .top-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(0, 210, 255, 0.4); }
-
         .nav-link {
             color: #8892b0; text-decoration: none; font-size: 0.85rem;
             padding: 0.4rem 0.8rem; border-radius: 6px; transition: all 0.2s;
@@ -35,7 +32,7 @@
         .nav-link.active { color: #00d2ff; }
         .nav-link.logout:hover { color: #ff6b6b; background: rgba(255, 59, 48, 0.08); }
 
-        .content { max-width: 900px; margin: 0 auto; padding: 5.5rem 1.5rem 2rem; }
+        .content { max-width: 960px; margin: 0 auto; padding: 5.5rem 1.5rem 2rem; }
 
         h1 { font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 0.25rem; }
         h1 span { color: #00d2ff; }
@@ -47,7 +44,6 @@
             border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
-
         .card-title {
             font-size: 1.1rem; font-weight: 700; color: #fff;
             margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;
@@ -74,6 +70,8 @@
         }
         .badge-admin { background: rgba(0, 210, 255, 0.15); color: #00d2ff; }
         .badge-user { background: rgba(255, 255, 255, 0.08); color: #8892b0; }
+        .badge-authentik { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
+        .badge-local { background: rgba(255, 165, 0, 0.15); color: #ffa500; }
 
         .last-login { color: #5a6380; font-size: 0.8rem; }
 
@@ -94,44 +92,20 @@
         .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
         .btn-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
-        .form-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
-        .form-group { flex: 1; min-width: 180px; }
-        .form-group label {
-            display: block; color: #8892b0; font-size: 0.8rem;
-            margin-bottom: 0.3rem; font-weight: 500;
+        .auth-info {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.75rem 1rem; border-radius: 10px;
+            background: rgba(0, 255, 136, 0.06);
+            border: 1px solid rgba(0, 255, 136, 0.12);
+            margin-bottom: 1rem; font-size: 0.85rem; color: #8892b0;
         }
-        .form-group input, .form-group select {
-            width: 100%; padding: 0.6rem 0.8rem;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px; color: #fff;
-            font-size: 0.9rem; font-family: inherit; outline: none;
-            transition: border-color 0.3s;
+        .auth-info .dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #00ff88; flex-shrink: 0;
         }
-        .form-group input:focus, .form-group select:focus { border-color: rgba(0, 210, 255, 0.5); }
-        .form-group select option { background: #16213e; }
+        .auth-info strong { color: #e0e0e0; }
 
-        .inline-input {
-            background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 210, 255, 0.3);
-            border-radius: 6px; color: #fff; padding: 0.3rem 0.5rem;
-            font-size: 0.85rem; font-family: inherit; outline: none; width: 100%;
-        }
-        .inline-input:focus { border-color: rgba(0, 210, 255, 0.6); }
-        .inline-select {
-            background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(0, 210, 255, 0.3);
-            border-radius: 6px; color: #fff; padding: 0.3rem 0.4rem;
-            font-size: 0.8rem; font-family: inherit; outline: none;
-        }
-        .inline-select option { background: #16213e; }
-
-        .msg {
-            padding: 0.7rem 1rem; border-radius: 8px;
-            font-size: 0.85rem; margin-bottom: 1rem; display: none;
-        }
-        .msg-success { background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.2); color: #00ff88; }
-        .msg-error { background: rgba(255, 59, 48, 0.1); border: 1px solid rgba(255, 59, 48, 0.3); color: #ff6b6b; }
-
-        /* Modal overlay */
+        /* Modal */
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0, 0, 0, 0.7); z-index: 200;
@@ -145,12 +119,34 @@
         }
         .modal h2 { font-size: 1.2rem; color: #fff; margin-bottom: 1rem; }
         .modal .form-group { margin-bottom: 1rem; }
+        .modal .form-group label {
+            display: block; color: #8892b0; font-size: 0.8rem;
+            margin-bottom: 0.3rem; font-weight: 500;
+        }
+        .modal .form-group input, .modal .form-group select {
+            width: 100%; padding: 0.6rem 0.8rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px; color: #fff;
+            font-size: 0.9rem; font-family: inherit; outline: none;
+        }
+        .modal .form-group input:focus, .modal .form-group select:focus {
+            border-color: rgba(0, 210, 255, 0.5);
+        }
+        .modal .form-group select option { background: #16213e; }
         .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
 
-        @media (max-width: 600px) {
+        .msg {
+            padding: 0.7rem 1rem; border-radius: 8px;
+            font-size: 0.85rem; margin-bottom: 1rem; display: none;
+        }
+        .msg-success { background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.2); color: #00ff88; }
+        .msg-error { background: rgba(255, 59, 48, 0.1); border: 1px solid rgba(255, 59, 48, 0.3); color: #ff6b6b; }
+
+        .groups-list { color: #5a6380; font-size: 0.75rem; max-width: 200px; word-break: break-word; }
+
+        @media (max-width: 700px) {
             .content { padding: 5rem 1rem 1.5rem; }
-            .form-row { flex-direction: column; }
-            .user-table { font-size: 0.8rem; }
             .hide-mobile { display: none; }
         }
     </style>
@@ -168,63 +164,11 @@
 
     <div class="content">
         <h1><span>⚡</span> Admin Panel</h1>
-        <p class="page-subtitle">Manage users and security settings</p>
+        <p class="page-subtitle">User management &amp; access control</p>
 
-        <!-- Change Own Password -->
-        <div class="card">
-            <div class="card-title"><span class="icon">🔒</span> Change Your Password</div>
-            <div class="msg msg-success" id="pwSuccess"></div>
-            <div class="msg msg-error" id="pwError"></div>
-            <form id="changePasswordForm">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Current Password</label>
-                        <input type="password" id="currentPassword" required autocomplete="current-password">
-                    </div>
-                    <div class="form-group">
-                        <label>New Password</label>
-                        <input type="password" id="newPassword" required minlength="8" autocomplete="new-password">
-                    </div>
-                    <div class="form-group">
-                        <label>Confirm New Password</label>
-                        <input type="password" id="confirmPassword" required minlength="8" autocomplete="new-password">
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary">Update Password</button>
-            </form>
-        </div>
-
-        <!-- Create User -->
-        <div class="card">
-            <div class="card-title"><span class="icon">➕</span> Create User</div>
-            <div class="msg msg-success" id="createSuccess"></div>
-            <div class="msg msg-error" id="createError"></div>
-            <form id="createUserForm">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Name</label>
-                        <input type="text" id="newName" placeholder="Full name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" id="newEmail" placeholder="user@morenet.co.za" required>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" id="newUserPassword" placeholder="Min 8 characters" required minlength="8">
-                    </div>
-                    <div class="form-group">
-                        <label>Role</label>
-                        <select id="newRole">
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary">Create User</button>
-            </form>
+        <div class="auth-info" id="authInfo">
+            <div class="dot"></div>
+            <span>Authentication: <strong id="authMode">loading...</strong></span>
         </div>
 
         <!-- Users List -->
@@ -238,6 +182,7 @@
                         <th>Name</th>
                         <th>Email</th>
                         <th>Role</th>
+                        <th class="hide-mobile">Auth</th>
                         <th class="hide-mobile">Last Login</th>
                         <th>Actions</th>
                     </tr>
@@ -258,8 +203,8 @@
                     <input type="text" id="editName" required>
                 </div>
                 <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" id="editEmail" required>
+                    <label>Email <span style="color:#5a6380;font-weight:400;">(managed by Authentik)</span></label>
+                    <input type="email" id="editEmail" disabled style="opacity:0.5;">
                 </div>
                 <div class="form-group">
                     <label>Role</label>
@@ -268,9 +213,9 @@
                         <option value="admin">Admin</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>New Password <span style="color:#5a6380;font-weight:400;">(leave blank to keep current)</span></label>
-                    <input type="password" id="editPassword" minlength="8" placeholder="••••••••">
+                <div class="form-group" id="editGroupsContainer" style="display:none;">
+                    <label>Authentik Groups</label>
+                    <div id="editGroups" class="groups-list" style="padding:0.5rem 0;"></div>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
@@ -319,6 +264,12 @@
         }
 
         // ── Load ─────────────────────────────────────────
+        async function loadAuthInfo() {
+            const info = await api('GET', '/api/auth-info');
+            document.getElementById('authMode').textContent =
+                info.mode === 'authentik' ? `Authentik SSO (${info.authentikUrl})` : 'Local (dev mode)';
+        }
+
         async function loadMe() {
             currentUser = await api('GET', '/api/me');
         }
@@ -333,6 +284,7 @@
                     <td>${esc(u.name || '—')}</td>
                     <td>${esc(u.email)}</td>
                     <td><span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">${u.role}</span></td>
+                    <td class="hide-mobile"><span class="badge ${u.auth === 'authentik' ? 'badge-authentik' : 'badge-local'}">${u.auth || 'local'}</span></td>
                     <td class="hide-mobile"><span class="last-login">${formatDate(u.last_login)}</span></td>
                     <td>
                         <div class="btn-row">
@@ -346,39 +298,7 @@
             `).join('');
         }
 
-        // ── Change Own Password ──────────────────────────
-        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const curr = document.getElementById('currentPassword').value;
-            const newPw = document.getElementById('newPassword').value;
-            const confirm = document.getElementById('confirmPassword').value;
-
-            if (newPw !== confirm) { showMsg('pwError', 'New passwords do not match'); return; }
-
-            try {
-                await api('POST', '/api/change-password', { currentPassword: curr, newPassword: newPw });
-                showMsg('pwSuccess', 'Password updated ✓');
-                e.target.reset();
-            } catch (err) { showMsg('pwError', err.message); }
-        });
-
-        // ── Create User ─────────────────────────────────
-        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            try {
-                const result = await api('POST', '/api/users', {
-                    name: document.getElementById('newName').value,
-                    email: document.getElementById('newEmail').value,
-                    password: document.getElementById('newUserPassword').value,
-                    role: document.getElementById('newRole').value,
-                });
-                showMsg('createSuccess', `User ${result.email} created ✓`);
-                e.target.reset();
-                loadUsers();
-            } catch (err) { showMsg('createError', err.message); }
-        });
-
-        // ── Edit User Modal ──────────────────────────────
+        // ── Edit Modal ───────────────────────────────────
         function openEditModal(id) {
             const u = allUsers.find(u => u.id === id);
             if (!u) return;
@@ -386,11 +306,15 @@
             document.getElementById('editName').value = u.name || '';
             document.getElementById('editEmail').value = u.email;
             document.getElementById('editRole').value = u.role;
-            document.getElementById('editPassword').value = '';
+            document.getElementById('editRole').disabled = (u.id === currentUser.id);
 
-            // Prevent self-role-change
-            const roleSelect = document.getElementById('editRole');
-            roleSelect.disabled = (u.id === currentUser.id);
+            const groupsContainer = document.getElementById('editGroupsContainer');
+            if (u.groups && u.groups.length > 0) {
+                document.getElementById('editGroups').textContent = u.groups.join(', ');
+                groupsContainer.style.display = 'block';
+            } else {
+                groupsContainer.style.display = 'none';
+            }
 
             document.getElementById('editModal').classList.add('active');
         }
@@ -399,52 +323,39 @@
             document.getElementById('editModal').classList.remove('active');
         }
 
-        // Close modal on overlay click
         document.getElementById('editModal').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) closeEditModal();
         });
-
-        // Close modal on Escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeEditModal();
-        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeEditModal(); });
 
         document.getElementById('editUserForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = document.getElementById('editId').value;
-            const payload = {
-                name: document.getElementById('editName').value,
-                email: document.getElementById('editEmail').value,
-                role: document.getElementById('editRole').value,
-            };
-            const pw = document.getElementById('editPassword').value;
-            if (pw) {
-                if (pw.length < 8) { alert('Password must be at least 8 characters'); return; }
-                payload.password = pw;
-            }
-
             try {
-                await api('PUT', `/api/users/${id}`, payload);
+                await api('PUT', `/api/users/${id}`, {
+                    name: document.getElementById('editName').value,
+                    role: document.getElementById('editRole').value,
+                });
                 closeEditModal();
                 showMsg('tableSuccess', 'User updated ✓');
                 loadUsers();
-            } catch (err) {
-                alert(err.message);
-            }
+            } catch (err) { alert(err.message); }
         });
 
-        // ── Delete User ──────────────────────────────────
+        // ── Delete ───────────────────────────────────────
         async function deleteUser(id, email) {
-            if (!confirm(`Delete user ${email}? This cannot be undone.`)) return;
+            if (!confirm(`Delete user ${email}? They can log in again via Authentik (will be re-created as default role).`)) return;
             try {
                 await api('DELETE', `/api/users/${id}`);
-                showMsg('tableSuccess', `${email} deleted`);
+                showMsg('tableSuccess', `${email} removed`);
                 loadUsers();
             } catch (err) { showMsg('tableError', err.message); }
         }
 
         // ── Init ─────────────────────────────────────────
-        loadMe().then(loadUsers).catch(() => window.location.href = '/login');
+        Promise.all([loadMe(), loadAuthInfo()])
+            .then(loadUsers)
+            .catch(() => window.location.href = '/login');
     </script>
 </body>
 </html>
