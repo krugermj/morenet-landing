@@ -300,7 +300,7 @@
                         <img src="nex.png" alt="NEX" class="message-avatar">
                         <div class="message-bubble">
                             <strong>NEX</strong>
-                            Hey! I'm Sherpa, your MoreNET helpdesk assistant. I can look up tickets, customers, and documentation. Ask me anything! 🏔️
+                            Hey! I'm NEX, your MoreNET client insights specialist. Ask me anything about tickets, customers, or documentation. ⚡
                         </div>
                     </div>
                 </div>
@@ -384,14 +384,14 @@
                 removeTyping();
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    addMessage(err.error || 'Something went wrong. Please try again.', 'Sherpa');
+                    addMessage(err.error || 'Something went wrong. Please try again.', 'NEX');
                 } else {
                     const data = await res.json();
-                    addMessage(formatMarkdown(data.reply || 'No response.'), 'Sherpa');
+                    addMessage(formatMarkdown(data.reply || 'No response.'), 'NEX');
                 }
             } catch (err) {
                 removeTyping();
-                addMessage('Connection error. Please try again.', 'Sherpa');
+                addMessage('Connection error. Please try again.', 'NEX');
             } finally {
                 sending = false;
                 sendBtn.disabled = false;
