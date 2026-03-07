@@ -4,6 +4,7 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -421,6 +422,127 @@ app.delete('/api/users/:id', apiAuthMiddleware, adminMiddleware, (req, res) => {
   users = users.filter(u => u.id !== userId);
   saveUsers(users);
   res.json({ success: true });
+});
+
+// ── Sherpa Chat (AI Assistant) ────────────────────────────
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+const SHERPA_MODEL = process.env.SHERPA_MODEL || 'google/gemini-2.0-flash-001';
+const SHERPA_SYSTEM = `You are Sherpa, a read-only helpdesk assistant for MoreNET service desk agents. You help look up tickets, customers, and documentation. You have tools for Zammad (helpdesk) and XWiki (documentation). Be concise and helpful. You CANNOT modify any data - read only. Format responses with markdown when helpful.`;
+
+const SHERPA_TOOLS = [
+  { type: 'function', function: { name: 'zammad_search', description: 'Search Zammad tickets by keyword', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'zammad_ticket', description: 'Get a specific Zammad ticket by ID', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Ticket ID number' } }, required: ['id'] } } },
+  { type: 'function', function: { name: 'zammad_customer', description: 'Look up a Zammad customer by name or email', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Customer name or email' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'zammad_stats', description: 'Get Zammad ticket statistics overview', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'xwiki_search', description: 'Search XWiki documentation', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'xwiki_get', description: 'Get a specific XWiki page by ID', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Page ID' } }, required: ['id'] } } },
+];
+
+const TOOL_COMMANDS = {
+  zammad_search: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'search', args.query || ''],
+  zammad_ticket: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'ticket', String(args.id || '')],
+  zammad_customer: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'customer', args.query || ''],
+  zammad_stats: () => ['python3', path.join(__dirname, 'zammad.py'), 'stats'],
+  xwiki_search: (args) => ['python3', path.join(__dirname, 'xwiki.py'), 'search', args.query || ''],
+  xwiki_get: (args) => ['python3', path.join(__dirname, 'xwiki.py'), 'get', String(args.id || '')],
+};
+
+function executeTool(name, args) {
+  const cmdBuilder = TOOL_COMMANDS[name];
+  if (!cmdBuilder) return `Unknown tool: ${name}`;
+  const [cmd, ...cmdArgs] = cmdBuilder(args);
+  try {
+    const result = execFileSync(cmd, cmdArgs, {
+      timeout: 15000,
+      maxBuffer: 512 * 1024,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: process.env.PATH },
+    });
+    return result.substring(0, 8000); // cap output
+  } catch (err) {
+    return `Tool error: ${err.message || 'execution failed'}`;
+  }
+}
+
+async function callLLM(messages, tools) {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+    },
+    body: JSON.stringify({ model: SHERPA_MODEL, messages, tools, max_tokens: 2048 }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`LLM API error ${res.status}: ${errText}`);
+  }
+  return res.json();
+}
+
+// Per-user conversation history (in-memory, last 20 messages)
+const chatHistory = new Map();
+const MAX_HISTORY = 20;
+
+app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
+  if (!OPENROUTER_API_KEY) {
+    return res.status(503).json({ error: 'Chat not configured (missing API key)' });
+  }
+
+  const { message } = req.body;
+  if (!message || typeof message !== 'string' || message.length > 2000) {
+    return res.status(400).json({ error: 'Message required (max 2000 chars)' });
+  }
+
+  const userId = req.user.email;
+  if (!chatHistory.has(userId)) chatHistory.set(userId, []);
+  const history = chatHistory.get(userId);
+
+  history.push({ role: 'user', content: message });
+  if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+
+  const messages = [
+    { role: 'system', content: SHERPA_SYSTEM },
+    ...history,
+  ];
+
+  try {
+    let attempts = 0;
+    const MAX_TOOL_ROUNDS = 5;
+
+    while (attempts < MAX_TOOL_ROUNDS) {
+      const data = await callLLM(messages, SHERPA_TOOLS);
+      const choice = data.choices?.[0];
+      if (!choice) throw new Error('No response from LLM');
+
+      const msg = choice.message;
+
+      // If there are tool calls, execute them and loop
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        messages.push(msg); // add assistant message with tool_calls
+        for (const tc of msg.tool_calls) {
+          let args = {};
+          try { args = JSON.parse(tc.function.arguments || '{}'); } catch {}
+          console.log(`Sherpa tool: ${tc.function.name}(${JSON.stringify(args)}) [user: ${userId}]`);
+          const result = executeTool(tc.function.name, args);
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
+        }
+        attempts++;
+        continue;
+      }
+
+      // Final text response
+      const reply = msg.content || 'I couldn\'t generate a response.';
+      history.push({ role: 'assistant', content: reply });
+      if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+      return res.json({ reply });
+    }
+
+    return res.json({ reply: 'I hit my tool usage limit for this question. Try rephrasing?' });
+  } catch (err) {
+    console.error('Sherpa error:', err.message);
+    return res.status(500).json({ error: 'Sherpa encountered an error. Please try again.' });
+  }
 });
 
 // ── Protected App ────────────────────────────────────────
