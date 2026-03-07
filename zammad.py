@@ -86,12 +86,23 @@ def cmd_ticket(args):
     ticket = api("GET", f"tickets/{args.id}")
     articles = api("GET", f"ticket_articles/by_ticket/{args.id}")
     ticket["articles"] = articles
+    ticket["state"] = STATE_NAMES.get(ticket.get("state_id"), f"unknown({ticket.get('state_id')})")
     print(json.dumps(ticket, indent=2))
+
+STATE_NAMES = {1: "new", 2: "open", 3: "pending reminder", 4: "closed", 5: "merged", 6: "removed", 7: "pending close"}
+
+def enrich_tickets(tickets):
+    """Add human-readable state name to ticket results."""
+    if not isinstance(tickets, list):
+        return tickets
+    for t in tickets:
+        t["state"] = STATE_NAMES.get(t.get("state_id"), f"unknown({t.get('state_id')})")
+    return tickets
 
 def cmd_search(args):
     query = quote(args.query)
     result = api("GET", f"tickets/search?query={query}&per_page=20")
-    print(json.dumps(result, indent=2))
+    print(json.dumps(enrich_tickets(result), indent=2))
 
 def cmd_customer(args):
     result = api("GET", f"users/search?query={quote(args.email)}&per_page=5")
@@ -100,7 +111,7 @@ def cmd_customer(args):
         user_id = user.get("id")
         # Get their tickets
         tickets = api("GET", f"tickets/search?query=customer_id:{user_id}&per_page=20")
-        print(json.dumps({"user": user, "tickets": tickets}, indent=2))
+        print(json.dumps({"user": user, "tickets": enrich_tickets(tickets)}, indent=2))
     else:
         print(json.dumps({"error": "Customer not found"}, indent=2))
 
