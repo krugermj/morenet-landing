@@ -425,8 +425,8 @@ app.delete('/api/users/:id', apiAuthMiddleware, adminMiddleware, (req, res) => {
 });
 
 // ── Sherpa Chat (AI Assistant) ────────────────────────────
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const SHERPA_MODEL = process.env.SHERPA_MODEL || 'google/gemini-2.0-flash-001';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const SHERPA_MODEL = process.env.SHERPA_MODEL || 'gemini-2.0-flash';
 const SHERPA_SYSTEM = `You are Sherpa, a read-only helpdesk assistant for MoreNET service desk agents. You help look up tickets, customers, and documentation. You have tools for Zammad (helpdesk) and XWiki (documentation). Be concise and helpful. You CANNOT modify any data - read only. Format responses with markdown when helpful.`;
 
 const SHERPA_TOOLS = [
@@ -464,20 +464,80 @@ function executeTool(name, args) {
   }
 }
 
+// Convert OpenAI-style messages to Gemini format
+function toGeminiContents(messages) {
+  const contents = [];
+  for (const m of messages) {
+    if (m.role === 'system') continue; // handled separately
+    if (m.role === 'user') {
+      contents.push({ role: 'user', parts: [{ text: m.content }] });
+    } else if (m.role === 'assistant') {
+      if (m.tool_calls) {
+        const parts = m.tool_calls.map(tc => ({
+          functionCall: { name: tc.function.name, args: JSON.parse(tc.function.arguments || '{}') }
+        }));
+        if (m.content) parts.unshift({ text: m.content });
+        contents.push({ role: 'model', parts });
+      } else {
+        contents.push({ role: 'model', parts: [{ text: m.content || '' }] });
+      }
+    } else if (m.role === 'tool') {
+      contents.push({ role: 'user', parts: [{ functionResponse: { name: m._toolName || 'tool', response: { result: m.content } } }] });
+    }
+  }
+  return contents;
+}
+
+function toGeminiTools(tools) {
+  return [{ functionDeclarations: tools.map(t => ({
+    name: t.function.name,
+    description: t.function.description,
+    parameters: t.function.parameters,
+  })) }];
+}
+
 async function callLLM(messages, tools) {
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${SHERPA_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const systemMsg = messages.find(m => m.role === 'system');
+  const body = {
+    contents: toGeminiContents(messages),
+    tools: toGeminiTools(tools),
+    systemInstruction: systemMsg ? { parts: [{ text: systemMsg.content }] } : undefined,
+    generationConfig: { maxOutputTokens: 2048 },
+  };
+
+  const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-    },
-    body: JSON.stringify({ model: SHERPA_MODEL, messages, tools, max_tokens: 2048 }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`LLM API error ${res.status}: ${errText}`);
+    throw new Error(`Gemini API error ${res.status}: ${errText}`);
   }
-  return res.json();
+  const data = await res.json();
+
+  // Convert Gemini response to OpenAI-compatible format
+  const candidate = data.candidates?.[0];
+  if (!candidate) throw new Error('No response from Gemini');
+
+  const parts = candidate.content?.parts || [];
+  const textParts = parts.filter(p => p.text).map(p => p.text).join('');
+  const funcCalls = parts.filter(p => p.functionCall);
+
+  if (funcCalls.length > 0) {
+    return { choices: [{ message: {
+      role: 'assistant',
+      content: textParts || null,
+      tool_calls: funcCalls.map((fc, i) => ({
+        id: `call_${i}`,
+        type: 'function',
+        function: { name: fc.functionCall.name, arguments: JSON.stringify(fc.functionCall.args || {}) }
+      }))
+    }}]};
+  }
+
+  return { choices: [{ message: { role: 'assistant', content: textParts || 'No response.' } }] };
 }
 
 // Per-user conversation history (in-memory, last 20 messages)
@@ -485,8 +545,8 @@ const chatHistory = new Map();
 const MAX_HISTORY = 20;
 
 app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
-  if (!OPENROUTER_API_KEY) {
-    return res.status(503).json({ error: 'Chat not configured (missing API key)' });
+  if (!GEMINI_API_KEY) {
+    return res.status(503).json({ error: 'Chat not configured (missing Gemini API key)' });
   }
 
   const { message } = req.body;
@@ -525,7 +585,7 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
           try { args = JSON.parse(tc.function.arguments || '{}'); } catch {}
           console.log(`Sherpa tool: ${tc.function.name}(${JSON.stringify(args)}) [user: ${userId}]`);
           const result = executeTool(tc.function.name, args);
-          messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: result, _toolName: tc.function.name });
         }
         attempts++;
         continue;
