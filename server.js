@@ -430,34 +430,43 @@ const SHERPA_MODEL = process.env.SHERPA_MODEL || 'google/gemini-2.0-flash-001';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '';
 
-const SHERPA_SYSTEM = `You are NEX, a client insights specialist for MoreNET / ICTInternet. You help service desk agents and staff look up tickets, customers, and documentation.
+const SHERPA_SYSTEM = `You are NEX, a client insights specialist for MoreNET / ICTInternet. You help service desk agents and staff by cross-referencing ALL available systems to build a complete picture.
 
-## Your Tools
-- **Zammad** — helpdesk tickets, customers, queue stats, agent workloads, ticket aging
-- **XWiki** — internal documentation and knowledge base
-- **Escalate** — flag something for senior support (NEX orchestrator) when you can't answer
+## Your Systems
+1. **Zammad** — helpdesk tickets, customer profiles, queue stats, agent workloads
+2. **Billing (MetaBase)** — client financials: invoices, payments, outstanding balances, services, annuities
+3. **XWiki** — internal documentation, client notes, technical procedures
+4. **Escalate** — flag for senior support when you can't answer
+
+## CRITICAL: Cross-Reference ALL Systems
+When asked about a person or customer, **ALWAYS query ALL relevant systems**, not just one:
+- **Customer lookup** → search Zammad (customer profile + tickets) AND billing (client financials + services) AND XWiki (documentation/notes)
+- **Ticket inquiry** → get ticket details AND look up the customer in billing for account context
+- **General questions** → search XWiki for docs AND Zammad for related tickets
+
+DO NOT stop after querying one system. The user expects a COMPREHENSIVE answer combining data from every source.
 
 ## How to Answer Well
-1. **Always use your tools** before answering questions about tickets, customers, or docs. Don't guess.
-2. **Be thorough** — when showing ticket info, include: ticket number, title, state, owner, customer, created date, last update, and key article content.
-3. **Format with markdown** — use tables for lists of tickets, bold for key info, bullet points for details.
-4. **Include context** — when showing customer info, show their recent tickets too. When showing a ticket, summarize the conversation from the articles.
-5. **Ticket numbers** — Zammad tickets have both an internal ID and a display number (7+ digits like 43274489). Always show the display number to users.
-6. **Links** — when referencing tickets, include the Zammad URL: https://z.ictglobe.support/#ticket/zoom/{internal_id}
+1. **Use multiple tools per question** — a customer lookup should trigger 3+ tool calls (Zammad customer, billing client, XWiki search)
+2. **Be thorough** — include all relevant details: contact info, address, account numbers, ticket history, financial status, service details
+3. **Format with markdown** — use tables for lists, bold for key info, sections with headers for different data sources
+4. **Structure your answer by source** — e.g. "### Contact Details (Zammad)" then "### Billing & Services" then "### Ticket History" then "### Documentation"
+5. **Ticket numbers** — always show the display number (7+ digits) and link: https://z.ictglobe.support/#ticket/zoom/{internal_id}
+6. **Money** — billing amounts are in Rands (ZAR). Show outstanding balances prominently.
+7. **Summarize ticket articles** — don't just list tickets, summarize what the conversations were about
 
 ## When to Escalate
-Use the escalate tool when:
-- You genuinely cannot find the information requested
+- You genuinely cannot find the information after searching all systems
 - The user needs an action performed (update ticket, change account, etc.)
-- The question requires judgment or analysis beyond your data
+- The question requires judgment beyond your data
 - You're unsure about something important
 
 ## Rules
 - You CANNOT modify any data — read only
-- Report information from tools accurately — never fabricate data
-- If a tool returns no results, say so clearly
-- Be concise but complete — don't leave out important details
-- Be professional but friendly — you're South African, keep it warm`;
+- Report information from tools accurately — never fabricate data or URLs
+- If a tool returns no results, mention that you searched but found nothing (don't silently skip it)
+- If a search fails, try alternative search terms
+- Be professional but friendly — South African warm, not corporate cold`;
 
 const SHERPA_TOOLS = [
   { type: 'function', function: { name: 'zammad_search', description: 'Search Zammad tickets by keyword. Use for finding tickets by customer name, subject, content, etc.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query — can be customer name, keyword, ticket number, etc.' } }, required: ['query'] } } },
@@ -468,6 +477,10 @@ const SHERPA_TOOLS = [
   { type: 'function', function: { name: 'zammad_aging', description: 'Ticket age report: age distribution buckets, oldest tickets, stalest (least recently updated) tickets, average age by state.', parameters: { type: 'object', properties: { top: { type: 'string', description: 'Number of oldest/stalest to show (default 10)' } } } } },
   { type: 'function', function: { name: 'xwiki_search', description: 'Search the MoreNET documentation wiki for procedures, guides, and knowledge base articles.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'xwiki_get', description: 'Get full content of a specific wiki page by its ID.', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Page ID' } }, required: ['id'] } } },
+  { type: 'function', function: { name: 'billing_client', description: 'Get client financial overview from billing system: account details, invoices, outstanding balance, payment history. Search by name, company, or account number.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'Client name, company name, or account number' } }, required: ['name'] } } },
+  { type: 'function', function: { name: 'billing_invoices', description: 'Get invoice history for a client. Shows recent invoices with amounts, dates, and outstanding balances.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'Client name or company' }, months: { type: 'string', description: 'Number of months to look back (default 6)' } }, required: ['name'] } } },
+  { type: 'function', function: { name: 'billing_annuity', description: 'Get recurring billing (MRC/monthly services) for a client. Shows active subscriptions and monthly charges.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'Client name or company' } }, required: ['name'] } } },
+  { type: 'function', function: { name: 'billing_search', description: 'Search billing system for clients by name, company, or account number. Use for finding the right client when you have partial info.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'escalate', description: 'Escalate a question or request to the senior NEX orchestrator for help. Use when you cannot answer, need an action performed, or need human judgment.', parameters: { type: 'object', properties: { reason: { type: 'string', description: 'What the user needs and why you are escalating' }, context: { type: 'string', description: 'Relevant context: ticket numbers, customer info, what you already tried' } }, required: ['reason'] } } },
 ];
 
@@ -480,6 +493,14 @@ const TOOL_COMMANDS = {
   zammad_aging: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'aging', '--top', String(args.top || '10')],
   xwiki_search: (args) => ['python3', path.join(__dirname, 'xwiki.py'), 'search', args.query || ''],
   xwiki_get: (args) => ['python3', path.join(__dirname, 'xwiki.py'), 'get', String(args.id || '')],
+  billing_client: (args) => ['python3', path.join(__dirname, 'metabase.py'), 'client', args.name || ''],
+  billing_invoices: (args) => {
+    const cmd = ['python3', path.join(__dirname, 'metabase.py'), 'invoices', args.name || ''];
+    if (args.months) cmd.push('--months', String(args.months));
+    return cmd;
+  },
+  billing_annuity: (args) => ['python3', path.join(__dirname, 'metabase.py'), 'annuity', args.name || ''],
+  billing_search: (args) => ['python3', path.join(__dirname, 'metabase.py'), 'search', args.query || ''],
 };
 
 function executeTool(name, args) {
