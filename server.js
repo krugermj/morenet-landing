@@ -587,25 +587,44 @@ function saveChat(chatData) {
   fs.writeFileSync(file, JSON.stringify(chatData, null, 2));
 }
 
-function listChats(limit = 50) {
+// Chat review metadata (separate file to avoid modifying chat logs)
+const CHAT_META_FILE = path.join(path.dirname(DATA_FILE), 'chat-meta.json');
+
+function loadChatMeta() {
+  try { return JSON.parse(fs.readFileSync(CHAT_META_FILE, 'utf8')); } catch { return {}; }
+}
+
+function saveChatMeta(meta) {
+  fs.writeFileSync(CHAT_META_FILE, JSON.stringify(meta, null, 2));
+}
+
+function listChats(limit = 50, showReviewed = false) {
   try {
+    const meta = loadChatMeta();
     const files = fs.readdirSync(CHATS_DIR)
       .filter(f => f.endsWith('.json'))
       .sort()
-      .reverse()
-      .slice(0, limit);
-    return files.map(f => {
+      .reverse();
+
+    const results = [];
+    for (const f of files) {
+      const reviewed = meta[f]?.reviewed || false;
+      if (!showReviewed && reviewed) continue;
       try {
         const data = JSON.parse(fs.readFileSync(path.join(CHATS_DIR, f), 'utf8'));
-        return {
+        results.push({
           file: f,
           userId: data.userId,
           date: data.date,
           messageCount: data.messages.length,
           lastMessage: data.messages.length > 0 ? data.messages[data.messages.length - 1].timestamp : null,
-        };
-      } catch { return { file: f, error: true }; }
-    });
+          reviewed,
+          reviewedBy: meta[f]?.reviewedBy || null,
+        });
+      } catch { results.push({ file: f, error: true }); }
+      if (results.length >= limit) break;
+    }
+    return results;
   } catch { return []; }
 }
 
@@ -748,14 +767,36 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
 // ── Admin: Chat History API ─────────────────────────────
 app.get('/api/admin/chats', apiAuthMiddleware, adminMiddleware, (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
-  res.json(listChats(limit));
+  const showReviewed = req.query.reviewed === 'true';
+  res.json(listChats(limit, showReviewed));
 });
 
 app.get('/api/admin/chats/:filename', apiAuthMiddleware, adminMiddleware, (req, res) => {
   const filename = req.params.filename.replace(/[^a-zA-Z0-9@._-]/g, '');
   const data = getChatDetail(filename + '.json');
   if (!data) return res.status(404).json({ error: 'Chat not found' });
+  // Attach review status
+  const meta = loadChatMeta();
+  data._reviewed = meta[filename + '.json']?.reviewed || false;
+  data._reviewedBy = meta[filename + '.json']?.reviewedBy || null;
+  data._reviewedAt = meta[filename + '.json']?.reviewedAt || null;
   res.json(data);
+});
+
+app.patch('/api/admin/chats/:filename/review', apiAuthMiddleware, adminMiddleware, (req, res) => {
+  const filename = req.params.filename.replace(/[^a-zA-Z0-9@._-]/g, '') + '.json';
+  const fullPath = path.join(CHATS_DIR, filename);
+  if (!fs.existsSync(fullPath)) return res.status(404).json({ error: 'Chat not found' });
+
+  const meta = loadChatMeta();
+  const { reviewed } = req.body;
+  meta[filename] = {
+    reviewed: !!reviewed,
+    reviewedBy: req.user.email,
+    reviewedAt: new Date().toISOString(),
+  };
+  saveChatMeta(meta);
+  res.json({ success: true, reviewed: !!reviewed });
 });
 
 // ── Admin: Escalations API ──────────────────────────────
