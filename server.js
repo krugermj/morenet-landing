@@ -427,25 +427,48 @@ app.delete('/api/users/:id', apiAuthMiddleware, adminMiddleware, (req, res) => {
 // ── Sherpa Chat (AI Assistant) ────────────────────────────
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const SHERPA_MODEL = process.env.SHERPA_MODEL || 'google/gemini-2.0-flash-001';
-const SHERPA_SYSTEM = `You are NEX, a read-only helpdesk assistant for MoreNET service desk agents. You help look up tickets, customers, and documentation.
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '';
 
-TOOLS: You have Zammad (helpdesk tickets/customers) and XWiki (documentation). Use them to answer questions.
+const SHERPA_SYSTEM = `You are NEX, a client insights specialist for MoreNET / ICTInternet. You help service desk agents and staff look up tickets, customers, and documentation.
 
-RULES:
-- Report information returned by your tools accurately. Include URLs, links, and references found in ticket data.
-- If you don't have information on something, say so — don't make up data that wasn't in tool results.
-- You CANNOT modify any data — read only.
-- Be concise. Format with markdown when helpful.`;
+## Your Tools
+- **Zammad** — helpdesk tickets, customers, queue stats, agent workloads, ticket aging
+- **XWiki** — internal documentation and knowledge base
+- **Escalate** — flag something for senior support (NEX orchestrator) when you can't answer
+
+## How to Answer Well
+1. **Always use your tools** before answering questions about tickets, customers, or docs. Don't guess.
+2. **Be thorough** — when showing ticket info, include: ticket number, title, state, owner, customer, created date, last update, and key article content.
+3. **Format with markdown** — use tables for lists of tickets, bold for key info, bullet points for details.
+4. **Include context** — when showing customer info, show their recent tickets too. When showing a ticket, summarize the conversation from the articles.
+5. **Ticket numbers** — Zammad tickets have both an internal ID and a display number (7+ digits like 43274489). Always show the display number to users.
+6. **Links** — when referencing tickets, include the Zammad URL: https://z.ictglobe.support/#ticket/zoom/{internal_id}
+
+## When to Escalate
+Use the escalate tool when:
+- You genuinely cannot find the information requested
+- The user needs an action performed (update ticket, change account, etc.)
+- The question requires judgment or analysis beyond your data
+- You're unsure about something important
+
+## Rules
+- You CANNOT modify any data — read only
+- Report information from tools accurately — never fabricate data
+- If a tool returns no results, say so clearly
+- Be concise but complete — don't leave out important details
+- Be professional but friendly — you're South African, keep it warm`;
 
 const SHERPA_TOOLS = [
-  { type: 'function', function: { name: 'zammad_search', description: 'Search Zammad tickets by keyword', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
-  { type: 'function', function: { name: 'zammad_ticket', description: 'Get a specific Zammad ticket by ID', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Ticket ID number' } }, required: ['id'] } } },
-  { type: 'function', function: { name: 'zammad_customer', description: 'Look up a Zammad customer by name or email', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Customer name or email' } }, required: ['query'] } } },
-  { type: 'function', function: { name: 'zammad_stats', description: 'Get Zammad ticket statistics overview', parameters: { type: 'object', properties: {} } } },
-  { type: 'function', function: { name: 'zammad_agents', description: 'List all agents with their ticket counts and state breakdown (who owns how many tickets)', parameters: { type: 'object', properties: {} } } },
-  { type: 'function', function: { name: 'zammad_aging', description: 'Ticket age report: age distribution, oldest tickets, stalest tickets, average age by state', parameters: { type: 'object', properties: { top: { type: 'string', description: 'Number of oldest/stalest to show (default 10)' } } } } },
-  { type: 'function', function: { name: 'xwiki_search', description: 'Search XWiki documentation', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
-  { type: 'function', function: { name: 'xwiki_get', description: 'Get a specific XWiki page by ID', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Page ID' } }, required: ['id'] } } },
+  { type: 'function', function: { name: 'zammad_search', description: 'Search Zammad tickets by keyword. Use for finding tickets by customer name, subject, content, etc.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query — can be customer name, keyword, ticket number, etc.' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'zammad_ticket', description: 'Get full details of a specific ticket including all articles/messages. Accepts ticket number (e.g. 43274489) or internal ID.', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Ticket number or internal ID' } }, required: ['id'] } } },
+  { type: 'function', function: { name: 'zammad_customer', description: 'Look up a customer by name, email, or phone. Returns customer profile and their tickets.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Customer name, email, or phone number' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'zammad_stats', description: 'Get ticket queue statistics — counts by state (new, open, pending, etc.)', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'zammad_agents', description: 'List all support agents with their ticket counts broken down by state. Shows workload distribution.', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'zammad_aging', description: 'Ticket age report: age distribution buckets, oldest tickets, stalest (least recently updated) tickets, average age by state.', parameters: { type: 'object', properties: { top: { type: 'string', description: 'Number of oldest/stalest to show (default 10)' } } } } },
+  { type: 'function', function: { name: 'xwiki_search', description: 'Search the MoreNET documentation wiki for procedures, guides, and knowledge base articles.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'xwiki_get', description: 'Get full content of a specific wiki page by its ID.', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Page ID' } }, required: ['id'] } } },
+  { type: 'function', function: { name: 'escalate', description: 'Escalate a question or request to the senior NEX orchestrator for help. Use when you cannot answer, need an action performed, or need human judgment.', parameters: { type: 'object', properties: { reason: { type: 'string', description: 'What the user needs and why you are escalating' }, context: { type: 'string', description: 'Relevant context: ticket numbers, customer info, what you already tried' } }, required: ['reason'] } } },
 ];
 
 const TOOL_COMMANDS = {
@@ -460,20 +483,115 @@ const TOOL_COMMANDS = {
 };
 
 function executeTool(name, args) {
+  // Handle escalation specially
+  if (name === 'escalate') {
+    return handleEscalation(args);
+  }
   const cmdBuilder = TOOL_COMMANDS[name];
   if (!cmdBuilder) return `Unknown tool: ${name}`;
   const [cmd, ...cmdArgs] = cmdBuilder(args);
   try {
     const result = execFileSync(cmd, cmdArgs, {
-      timeout: 15000,
-      maxBuffer: 512 * 1024,
+      timeout: 30000,
+      maxBuffer: 1024 * 1024,
       encoding: 'utf8',
       env: { ...process.env, PATH: process.env.PATH },
     });
-    return result.substring(0, 8000); // cap output
+    return result.substring(0, 12000); // increased cap
   } catch (err) {
     return `Tool error: ${err.message || 'execution failed'}`;
   }
+}
+
+// ── Escalation Handler ──────────────────────────────────
+function handleEscalation(args) {
+  const escalation = {
+    id: crypto.randomBytes(8).toString('hex'),
+    timestamp: new Date().toISOString(),
+    reason: args.reason || 'Unknown',
+    context: args.context || '',
+    status: 'pending',
+  };
+
+  // Save to escalations log
+  const escFile = path.join(path.dirname(DATA_FILE), 'escalations.json');
+  let escalations = [];
+  try { escalations = JSON.parse(fs.readFileSync(escFile, 'utf8')); } catch {}
+  escalations.push(escalation);
+  // Keep last 500 escalations
+  if (escalations.length > 500) escalations = escalations.slice(-500);
+  fs.writeFileSync(escFile, JSON.stringify(escalations, null, 2));
+
+  // Send Telegram notification to admin
+  if (TELEGRAM_BOT_TOKEN && TELEGRAM_ADMIN_CHAT_ID) {
+    const text = `🔔 *Sherpa Escalation*\n\n*Reason:* ${escalation.reason}\n*Context:* ${escalation.context || 'None'}\n*Time:* ${escalation.timestamp}\n*ID:* \`${escalation.id}\``;
+    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_ADMIN_CHAT_ID,
+        text,
+        parse_mode: 'Markdown',
+      }),
+    }).catch(err => console.error('Telegram escalation failed:', err.message));
+  }
+
+  console.log(`ESCALATION [${escalation.id}]: ${escalation.reason}`);
+  return `Escalation logged (ID: ${escalation.id}). The senior support team has been notified and will follow up.`;
+}
+
+// ── Chat Persistence ────────────────────────────────────
+const CHATS_DIR = path.join(path.dirname(DATA_FILE), 'chats');
+if (!fs.existsSync(CHATS_DIR)) fs.mkdirSync(CHATS_DIR, { recursive: true });
+
+function getChatFile(userId) {
+  // One file per user per day
+  const date = new Date().toISOString().slice(0, 10);
+  const safeUser = userId.replace(/[^a-zA-Z0-9@._-]/g, '_');
+  return path.join(CHATS_DIR, `${safeUser}_${date}.json`);
+}
+
+function loadChat(userId) {
+  const file = getChatFile(userId);
+  try {
+    if (fs.existsSync(file)) {
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    }
+  } catch {}
+  return { userId, date: new Date().toISOString().slice(0, 10), messages: [] };
+}
+
+function saveChat(chatData) {
+  const file = getChatFile(chatData.userId);
+  fs.writeFileSync(file, JSON.stringify(chatData, null, 2));
+}
+
+function listChats(limit = 50) {
+  try {
+    const files = fs.readdirSync(CHATS_DIR)
+      .filter(f => f.endsWith('.json'))
+      .sort()
+      .reverse()
+      .slice(0, limit);
+    return files.map(f => {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(CHATS_DIR, f), 'utf8'));
+        return {
+          file: f,
+          userId: data.userId,
+          date: data.date,
+          messageCount: data.messages.length,
+          lastMessage: data.messages.length > 0 ? data.messages[data.messages.length - 1].timestamp : null,
+        };
+      } catch { return { file: f, error: true }; }
+    });
+  } catch { return []; }
+}
+
+function getChatDetail(filename) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(CHATS_DIR, filename), 'utf8'));
+  } catch { return null; }
 }
 
 async function callLLM(messages, tools) {
@@ -483,7 +601,7 @@ async function callLLM(messages, tools) {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
     },
-    body: JSON.stringify({ model: SHERPA_MODEL, messages, tools, max_tokens: 2048 }),
+    body: JSON.stringify({ model: SHERPA_MODEL, messages, tools, max_tokens: 4096 }),
   });
   if (!res.ok) {
     const errText = await res.text();
@@ -492,9 +610,9 @@ async function callLLM(messages, tools) {
   return res.json();
 }
 
-// Per-user conversation history (in-memory, last 20 messages)
-const chatHistory = new Map();
-const MAX_HISTORY = 20;
+// In-memory conversation context (for LLM multi-turn)
+const chatContext = new Map();
+const MAX_CONTEXT = 30;
 
 app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
   if (!OPENROUTER_API_KEY) {
@@ -502,25 +620,43 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
   }
 
   const { message } = req.body;
-  if (!message || typeof message !== 'string' || message.length > 2000) {
-    return res.status(400).json({ error: 'Message required (max 2000 chars)' });
+  if (!message || typeof message !== 'string' || message.length > 4000) {
+    return res.status(400).json({ error: 'Message required (max 4000 chars)' });
+  }
+
+  // Handle reset command
+  if (message === '/reset') {
+    chatContext.delete(req.user.email);
+    return res.json({ reply: 'Conversation reset.' });
   }
 
   const userId = req.user.email;
-  if (!chatHistory.has(userId)) chatHistory.set(userId, []);
-  const history = chatHistory.get(userId);
+  const userName = req.user.name || userId;
 
-  history.push({ role: 'user', content: message });
-  if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+  // Load/init context
+  if (!chatContext.has(userId)) chatContext.set(userId, []);
+  const context = chatContext.get(userId);
+
+  context.push({ role: 'user', content: message });
+  if (context.length > MAX_CONTEXT) context.splice(0, context.length - MAX_CONTEXT);
+
+  // Persist user message
+  const chatData = loadChat(userId);
+  chatData.messages.push({
+    role: 'user',
+    content: message,
+    timestamp: new Date().toISOString(),
+    userName,
+  });
 
   const messages = [
     { role: 'system', content: SHERPA_SYSTEM },
-    ...history,
+    ...context,
   ];
 
   try {
     let attempts = 0;
-    const MAX_TOOL_ROUNDS = 5;
+    const MAX_TOOL_ROUNDS = 8;
 
     while (attempts < MAX_TOOL_ROUNDS) {
       const data = await callLLM(messages, SHERPA_TOOLS);
@@ -531,13 +667,29 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
 
       // If there are tool calls, execute them and loop
       if (msg.tool_calls && msg.tool_calls.length > 0) {
-        messages.push(msg); // add assistant message with tool_calls
+        messages.push(msg);
         for (const tc of msg.tool_calls) {
           let args = {};
           try { args = JSON.parse(tc.function.arguments || '{}'); } catch {}
           console.log(`Sherpa tool: ${tc.function.name}(${JSON.stringify(args)}) [user: ${userId}]`);
+
+          // Add user context to escalations
+          if (tc.function.name === 'escalate') {
+            args._user = userId;
+            args._userName = userName;
+          }
+
           const result = executeTool(tc.function.name, args);
           messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
+
+          // Log tool calls to chat history
+          chatData.messages.push({
+            role: 'tool',
+            tool: tc.function.name,
+            args,
+            result: result.substring(0, 2000),
+            timestamp: new Date().toISOString(),
+          });
         }
         attempts++;
         continue;
@@ -545,16 +697,53 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
 
       // Final text response
       const reply = msg.content || 'I couldn\'t generate a response.';
-      history.push({ role: 'assistant', content: reply });
-      if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+      context.push({ role: 'assistant', content: reply });
+      if (context.length > MAX_CONTEXT) context.splice(0, context.length - MAX_CONTEXT);
+
+      // Persist assistant response
+      chatData.messages.push({
+        role: 'assistant',
+        content: reply,
+        timestamp: new Date().toISOString(),
+        model: SHERPA_MODEL,
+      });
+      saveChat(chatData);
+
       return res.json({ reply });
     }
 
-    return res.json({ reply: 'I hit my tool usage limit for this question. Try rephrasing?' });
+    const fallback = 'I hit my tool usage limit for this question. Try rephrasing or I can escalate this for you.';
+    chatData.messages.push({ role: 'assistant', content: fallback, timestamp: new Date().toISOString() });
+    saveChat(chatData);
+    return res.json({ reply: fallback });
   } catch (err) {
     console.error('Sherpa error:', err.message);
+    chatData.messages.push({ role: 'error', content: err.message, timestamp: new Date().toISOString() });
+    saveChat(chatData);
     return res.status(500).json({ error: 'Sherpa encountered an error. Please try again.' });
   }
+});
+
+// ── Admin: Chat History API ─────────────────────────────
+app.get('/api/admin/chats', apiAuthMiddleware, adminMiddleware, (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  res.json(listChats(limit));
+});
+
+app.get('/api/admin/chats/:filename', apiAuthMiddleware, adminMiddleware, (req, res) => {
+  const filename = req.params.filename.replace(/[^a-zA-Z0-9@._-]/g, '');
+  const data = getChatDetail(filename + '.json');
+  if (!data) return res.status(404).json({ error: 'Chat not found' });
+  res.json(data);
+});
+
+// ── Admin: Escalations API ──────────────────────────────
+app.get('/api/admin/escalations', apiAuthMiddleware, adminMiddleware, (req, res) => {
+  const escFile = path.join(path.dirname(DATA_FILE), 'escalations.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(escFile, 'utf8'));
+    res.json(data.reverse());
+  } catch { res.json([]); }
 });
 
 // ── Protected App ────────────────────────────────────────

@@ -171,8 +171,15 @@
             <span>Authentication: <strong id="authMode">loading...</strong></span>
         </div>
 
+        <!-- Tabs -->
+        <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;">
+            <button class="btn btn-ghost" id="tabUsers" onclick="showTab('users')" style="border-color:rgba(0,210,255,0.4);color:#00d2ff;">👥 Users</button>
+            <button class="btn btn-ghost" id="tabChats" onclick="showTab('chats')">💬 Chat History</button>
+            <button class="btn btn-ghost" id="tabEscalations" onclick="showTab('escalations')">🔔 Escalations</button>
+        </div>
+
         <!-- Users List -->
-        <div class="card">
+        <div class="card" id="sectionUsers">
             <div class="card-title"><span class="icon">👥</span> Users <span id="userCount" style="color:#5a6380;font-size:0.8rem;font-weight:400;"></span></div>
             <div class="msg msg-success" id="tableSuccess"></div>
             <div class="msg msg-error" id="tableError"></div>
@@ -189,6 +196,23 @@
                 </thead>
                 <tbody id="usersBody"></tbody>
             </table>
+        </div>
+    </div>
+
+        <!-- Chat History -->
+        <div class="card" id="sectionChats" style="display:none;">
+            <div class="card-title"><span class="icon">💬</span> Chat History</div>
+            <div id="chatsList"></div>
+            <div id="chatDetail" style="display:none;">
+                <button class="btn btn-ghost btn-sm" onclick="backToChats()" style="margin-bottom:1rem;">← Back to list</button>
+                <div id="chatDetailContent"></div>
+            </div>
+        </div>
+
+        <!-- Escalations -->
+        <div class="card" id="sectionEscalations" style="display:none;">
+            <div class="card-title"><span class="icon">🔔</span> Escalations</div>
+            <div id="escalationsList"></div>
         </div>
     </div>
 
@@ -350,6 +374,107 @@
                 showMsg('tableSuccess', `${email} removed`);
                 loadUsers();
             } catch (err) { showMsg('tableError', err.message); }
+        }
+
+        // ── Tabs ─────────────────────────────────────────
+        function showTab(tab) {
+            ['users', 'chats', 'escalations'].forEach(t => {
+                document.getElementById('section' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? 'block' : 'none';
+                const btn = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+                if (t === tab) {
+                    btn.style.borderColor = 'rgba(0,210,255,0.4)';
+                    btn.style.color = '#00d2ff';
+                } else {
+                    btn.style.borderColor = '';
+                    btn.style.color = '';
+                }
+            });
+            if (tab === 'chats') loadChats();
+            if (tab === 'escalations') loadEscalations();
+        }
+
+        // ── Chat History ─────────────────────────────────
+        async function loadChats() {
+            try {
+                const chats = await api('GET', '/api/admin/chats?limit=100');
+                const el = document.getElementById('chatsList');
+                document.getElementById('chatDetail').style.display = 'none';
+                el.style.display = 'block';
+                if (!chats.length) {
+                    el.innerHTML = '<p style="color:#5a6380;">No chat history yet.</p>';
+                    return;
+                }
+                el.innerHTML = '<table class="user-table"><thead><tr><th>User</th><th>Date</th><th>Messages</th><th>Last Activity</th><th></th></tr></thead><tbody>' +
+                    chats.map(c => `<tr>
+                        <td>${esc(c.userId || '?')}</td>
+                        <td>${esc(c.date || '?')}</td>
+                        <td>${c.messageCount || 0}</td>
+                        <td><span class="last-login">${c.lastMessage ? formatDate(c.lastMessage) : '—'}</span></td>
+                        <td><button class="btn btn-ghost btn-sm" onclick="viewChat('${esc(c.file.replace('.json',''))}')">View</button></td>
+                    </tr>`).join('') + '</tbody></table>';
+            } catch (err) { console.error(err); }
+        }
+
+        async function viewChat(filename) {
+            try {
+                const data = await api('GET', `/api/admin/chats/${filename}`);
+                document.getElementById('chatsList').style.display = 'none';
+                const detail = document.getElementById('chatDetail');
+                detail.style.display = 'block';
+                const content = document.getElementById('chatDetailContent');
+
+                content.innerHTML = '<p style="color:#8892b0;margin-bottom:1rem;font-size:0.85rem;">User: <strong style="color:#fff;">' + esc(data.userId) + '</strong> | Date: ' + esc(data.date) + ' | Messages: ' + data.messages.length + '</p>';
+
+                data.messages.forEach(m => {
+                    const div = document.createElement('div');
+                    div.style.cssText = 'margin-bottom:0.75rem;padding:0.6rem 0.8rem;border-radius:8px;font-size:0.88rem;';
+                    if (m.role === 'user') {
+                        div.style.background = 'rgba(255,255,255,0.06)';
+                        div.style.borderLeft = '3px solid #8892b0';
+                        div.innerHTML = '<span style="color:#8892b0;font-size:0.75rem;">' + formatDate(m.timestamp) + ' — ' + esc(m.userName || 'User') + '</span><br>' + esc(m.content);
+                    } else if (m.role === 'assistant') {
+                        div.style.background = 'rgba(0,210,255,0.06)';
+                        div.style.borderLeft = '3px solid #00d2ff';
+                        div.innerHTML = '<span style="color:#00d2ff;font-size:0.75rem;">' + formatDate(m.timestamp) + ' — NEX' + (m.model ? ' (' + esc(m.model) + ')' : '') + '</span><br><div style="white-space:pre-wrap;">' + esc(m.content) + '</div>';
+                    } else if (m.role === 'tool') {
+                        div.style.background = 'rgba(255,165,0,0.06)';
+                        div.style.borderLeft = '3px solid #ffa500';
+                        div.style.fontSize = '0.8rem';
+                        div.innerHTML = '<span style="color:#ffa500;font-size:0.72rem;">' + formatDate(m.timestamp) + ' — Tool: ' + esc(m.tool || '?') + '</span><br><code style="font-size:0.78rem;color:#8892b0;">' + esc(JSON.stringify(m.args || {})) + '</code><details style="margin-top:0.3rem;"><summary style="color:#5a6380;cursor:pointer;font-size:0.78rem;">Result</summary><pre style="font-size:0.75rem;max-height:200px;overflow:auto;margin-top:0.3rem;color:#8892b0;white-space:pre-wrap;">' + esc(m.result || '') + '</pre></details>';
+                    } else if (m.role === 'error') {
+                        div.style.background = 'rgba(255,59,48,0.06)';
+                        div.style.borderLeft = '3px solid #ff6b6b';
+                        div.innerHTML = '<span style="color:#ff6b6b;font-size:0.75rem;">' + formatDate(m.timestamp) + ' — Error</span><br><code style="color:#ff6b6b;">' + esc(m.content) + '</code>';
+                    }
+                    content.appendChild(div);
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        function backToChats() {
+            document.getElementById('chatDetail').style.display = 'none';
+            document.getElementById('chatsList').style.display = 'block';
+        }
+
+        // ── Escalations ──────────────────────────────────
+        async function loadEscalations() {
+            try {
+                const data = await api('GET', '/api/admin/escalations');
+                const el = document.getElementById('escalationsList');
+                if (!data.length) {
+                    el.innerHTML = '<p style="color:#5a6380;">No escalations yet.</p>';
+                    return;
+                }
+                el.innerHTML = data.map(e => `<div style="margin-bottom:0.75rem;padding:0.6rem 0.8rem;border-radius:8px;background:rgba(255,165,0,0.06);border-left:3px solid #ffa500;font-size:0.88rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="color:#ffa500;font-size:0.75rem;font-weight:600;">${formatDate(e.timestamp)}</span>
+                        <span class="badge" style="background:rgba(255,165,0,0.15);color:#ffa500;">${esc(e.status)}</span>
+                    </div>
+                    <p style="margin-top:0.3rem;"><strong>Reason:</strong> ${esc(e.reason)}</p>
+                    ${e.context ? '<p style="color:#8892b0;font-size:0.82rem;margin-top:0.2rem;"><strong>Context:</strong> ' + esc(e.context) + '</p>' : ''}
+                    <code style="color:#5a6380;font-size:0.72rem;">ID: ${esc(e.id)}</code>
+                </div>`).join('');
+            } catch (err) { console.error(err); }
         }
 
         // ── Init ─────────────────────────────────────────
