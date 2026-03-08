@@ -82,9 +82,21 @@ def cmd_tickets(args):
             })
     print(json.dumps(output, indent=2))
 
+def resolve_ticket_id(raw_id):
+    """Resolve a ticket number or internal ID to the internal ID."""
+    raw = str(raw_id)
+    # If it looks like a Zammad ticket number (7+ digits), search by number first
+    if len(raw) >= 7:
+        results = api("GET", f"tickets/search?query=number:{quote(raw)}&per_page=1")
+        if isinstance(results, list) and results:
+            return results[0]["id"]
+    # Fall back to using as internal ID
+    return int(raw_id)
+
 def cmd_ticket(args):
-    ticket = api("GET", f"tickets/{args.id}")
-    articles = api("GET", f"ticket_articles/by_ticket/{args.id}")
+    ticket_id = resolve_ticket_id(args.id)
+    ticket = api("GET", f"tickets/{ticket_id}")
+    articles = api("GET", f"ticket_articles/by_ticket/{ticket_id}")
     ticket["articles"] = articles
     ticket["state"] = STATE_NAMES.get(ticket.get("state_id"), f"unknown({ticket.get('state_id')})")
     print(json.dumps(ticket, indent=2))
@@ -337,7 +349,7 @@ def main():
     p.add_argument("--limit", type=int, default=25)
     
     p = sub.add_parser("ticket")
-    p.add_argument("id", type=int)
+    p.add_argument("id", type=str, help="Internal ID or ticket number")
     
     p = sub.add_parser("search")
     p.add_argument("query")
