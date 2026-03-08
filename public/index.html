@@ -6,7 +6,7 @@
     <title>NEX — MoreNET Client Insights</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             color: #e0e0e0;
@@ -15,7 +15,7 @@
             display: flex;
             flex-direction: column;
         }
-        
+
         /* Top Bar */
         .top-bar {
             position: fixed;
@@ -27,37 +27,58 @@
             justify-content: space-between;
             align-items: center;
             padding: 0.75rem 2rem;
-            background: rgba(10, 10, 26, 0.9);
+            background: rgba(10, 10, 26, 0.95);
             backdrop-filter: blur(12px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
-        
-        .top-logo {
-            height: 40px;
-            width: auto;
+
+        .top-logo { height: 40px; width: auto; }
+
+        .top-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
-        
+
+        .top-bar-link {
+            color: #8892b0;
+            text-decoration: none;
+            font-size: 0.85rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .top-bar-link:hover { color: #00d2ff; background: rgba(0,210,255,0.08); }
+        .top-bar-link.logout:hover { color: #ff6b6b; background: rgba(255,59,48,0.08); }
+
+        .user-greeting {
+            color: #8892b0;
+            font-size: 0.85rem;
+        }
+
+        .user-greeting span { color: #00d2ff; font-weight: 600; }
+
         .top-avatar {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             object-fit: cover;
             border: 2px solid rgba(0, 210, 255, 0.4);
         }
-        
+
         /* Main Content */
         .main {
             flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 5rem 1.5rem 2rem;
+            padding: 5rem 1rem 2rem;
             background: linear-gradient(135deg, #0f0f23 0%, #16213e 50%, #0f3460 100%);
             position: relative;
             overflow: hidden;
         }
-        
+
         .main::before {
             content: '';
             position: absolute;
@@ -68,252 +89,473 @@
             background: radial-gradient(circle, rgba(0, 210, 255, 0.05) 0%, transparent 50%);
             animation: pulse 8s ease-in-out infinite;
         }
-        
+
         @keyframes pulse {
             0%, 100% { transform: scale(1); opacity: 0.5; }
             50% { transform: scale(1.1); opacity: 1; }
         }
-        
-        /* NEX Intro */
+
+        /* NEX Intro — collapsible */
         .nex-intro {
             position: relative;
             z-index: 1;
             text-align: center;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.4s ease;
         }
-        
+
+        .nex-intro.compact { margin-bottom: 1rem; }
+        .nex-intro.compact .nex-avatar { width: 60px; height: 60px; }
+        .nex-intro.compact .nex-heading { font-size: 1.4rem; }
+        .nex-intro.compact .nex-subtitle { display: none; }
+
         .nex-avatar {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
             object-fit: cover;
             border: 3px solid rgba(0, 210, 255, 0.4);
             box-shadow: 0 0 30px rgba(0, 210, 255, 0.15);
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
             animation: glow 4s ease-in-out infinite;
+            transition: all 0.4s ease;
         }
-        
+
         @keyframes glow {
             0%, 100% { box-shadow: 0 0 30px rgba(0, 210, 255, 0.15); border-color: rgba(0, 210, 255, 0.4); }
             50% { box-shadow: 0 0 40px rgba(0, 210, 255, 0.3); border-color: rgba(0, 210, 255, 0.7); }
         }
-        
+
         .nex-heading {
-            font-size: 2.4rem;
+            font-size: 2rem;
             font-weight: 800;
             color: #fff;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.4rem;
+            transition: font-size 0.4s ease;
         }
-        
-        .nex-heading span {
-            color: #00d2ff;
-            text-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
-        }
-        
+
+        .nex-heading span { color: #00d2ff; text-shadow: 0 0 20px rgba(0, 210, 255, 0.3); }
+
         .nex-subtitle {
-            font-size: 1.05rem;
+            font-size: 1rem;
             color: #8892b0;
             font-style: italic;
         }
-        
+
+        /* Quick Start Suggestions */
+        .quick-start {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 1.25rem;
+            max-width: 640px;
+            transition: opacity 0.3s ease;
+        }
+
+        .quick-start.hidden { display: none; }
+
+        .quick-btn {
+            background: rgba(0, 210, 255, 0.06);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            border-radius: 20px;
+            padding: 0.45rem 1rem;
+            color: #8892b0;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .quick-btn:hover {
+            background: rgba(0, 210, 255, 0.12);
+            color: #00d2ff;
+            border-color: rgba(0, 210, 255, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .quick-btn .icon { margin-right: 0.3rem; }
+
         /* Chat Box */
         .chat-container {
             position: relative;
             z-index: 1;
             width: 100%;
-            max-width: 640px;
+            max-width: 720px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
-        
+
         .chat-box {
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
         }
-        
+
+        .chat-header {
+            display: flex;
+            justify-content: flex-end;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .new-chat-btn {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #8892b0;
+            font-size: 0.78rem;
+            padding: 0.3rem 0.7rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .new-chat-btn:hover {
+            color: #00d2ff;
+            border-color: rgba(0, 210, 255, 0.3);
+            background: rgba(0, 210, 255, 0.06);
+        }
+
         .chat-messages {
-            padding: 1.5rem;
-            min-height: 280px;
-            max-height: 400px;
+            padding: 1.25rem;
+            flex: 1;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 1rem;
+            min-height: 250px;
+            max-height: 55vh;
         }
-        
+
         .message {
             display: flex;
-            gap: 0.75rem;
+            gap: 0.65rem;
             align-items: flex-start;
-            animation: fadeIn 0.4s ease;
+            animation: fadeIn 0.35s ease;
         }
-        
+
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
+            from { opacity: 0; transform: translateY(6px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
+
         .message-avatar {
-            width: 32px;
-            height: 32px;
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
             object-fit: cover;
             flex-shrink: 0;
+            margin-top: 2px;
         }
-        
+
         .message-bubble {
             background: rgba(0, 210, 255, 0.08);
             border: 1px solid rgba(0, 210, 255, 0.15);
             border-radius: 12px;
-            padding: 0.75rem 1rem;
-            max-width: 85%;
-            font-size: 0.95rem;
-            line-height: 1.5;
+            padding: 0.65rem 0.9rem;
+            max-width: 88%;
+            font-size: 0.92rem;
+            line-height: 1.55;
             color: #c8d6e5;
+            overflow-x: auto;
         }
-        
-        .message-bubble strong {
+
+        .message-bubble.user-bubble {
+            margin-left: auto;
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        .message-bubble .sender {
             color: #00d2ff;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
+            font-weight: 600;
             display: block;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.2rem;
         }
-        
+
+        .message-bubble.user-bubble .sender { color: #8892b0; }
+
+        /* Markdown content styles */
+        .message-bubble table {
+            border-collapse: collapse;
+            margin: 0.5rem 0;
+            font-size: 0.85rem;
+            width: 100%;
+            overflow-x: auto;
+            display: block;
+        }
+
+        .message-bubble th, .message-bubble td {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 0.4rem 0.6rem;
+            text-align: left;
+        }
+
+        .message-bubble th {
+            background: rgba(0, 210, 255, 0.1);
+            color: #00d2ff;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        .message-bubble tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+
+        .message-bubble pre {
+            background: rgba(0, 0, 0, 0.35);
+            padding: 0.75rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 0.5rem 0;
+            font-size: 0.83rem;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            line-height: 1.45;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .message-bubble code {
+            background: rgba(0, 210, 255, 0.1);
+            padding: 0.12rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .message-bubble pre code {
+            background: none;
+            padding: 0;
+            border-radius: 0;
+        }
+
+        .message-bubble a {
+            color: #00d2ff;
+            text-decoration: underline;
+            text-decoration-color: rgba(0, 210, 255, 0.3);
+            transition: text-decoration-color 0.2s;
+        }
+
+        .message-bubble a:hover { text-decoration-color: #00d2ff; }
+
+        .message-bubble ul, .message-bubble ol {
+            margin: 0.4rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .message-bubble li { margin: 0.2rem 0; }
+
+        .message-bubble blockquote {
+            border-left: 3px solid rgba(0, 210, 255, 0.4);
+            padding-left: 0.75rem;
+            margin: 0.4rem 0;
+            color: #8892b0;
+        }
+
+        .message-bubble h3, .message-bubble h4 {
+            color: #fff;
+            margin: 0.5rem 0 0.25rem;
+        }
+
+        .message-bubble h3 { font-size: 1rem; }
+        .message-bubble h4 { font-size: 0.92rem; }
+
+        .message-bubble hr {
+            border: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin: 0.5rem 0;
+        }
+
+        /* Typing indicator */
         .typing-indicator {
             display: flex;
             gap: 4px;
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 0;
             align-items: center;
         }
-        
+
         .typing-dot {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             background: #00d2ff;
             border-radius: 50%;
             animation: typingBounce 1.4s infinite;
         }
-        
+
         .typing-dot:nth-child(2) { animation-delay: 0.2s; }
         .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        
+
         @keyframes typingBounce {
             0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-            30% { transform: translateY(-6px); opacity: 1; }
+            30% { transform: translateY(-5px); opacity: 1; }
         }
-        
+
+        /* Input Area */
         .chat-input-area {
             display: flex;
+            align-items: flex-end;
             border-top: 1px solid rgba(255, 255, 255, 0.08);
             background: rgba(0, 0, 0, 0.2);
+            padding: 0.5rem;
+            gap: 0.5rem;
         }
-        
+
         .chat-input {
             flex: 1;
             background: transparent;
             border: none;
-            padding: 1rem 1.25rem;
+            padding: 0.6rem 0.75rem;
             color: #fff;
-            font-size: 0.95rem;
+            font-size: 0.92rem;
             outline: none;
             font-family: inherit;
+            resize: none;
+            max-height: 120px;
+            line-height: 1.4;
+            overflow-y: auto;
         }
-        
+
         .chat-input::placeholder { color: #5a6380; }
-        
+
         .chat-send {
-            background: transparent;
-            border: none;
-            padding: 1rem 1.25rem;
+            background: rgba(0, 210, 255, 0.15);
+            border: 1px solid rgba(0, 210, 255, 0.3);
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
             color: #00d2ff;
-            font-size: 1.2rem;
+            font-size: 1rem;
             cursor: pointer;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
-        
-        .chat-send:hover { color: #fff; transform: scale(1.1); }
-        
+
+        .chat-send:hover { background: rgba(0, 210, 255, 0.25); color: #fff; }
+        .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
         /* Status Badge */
         .status-badge {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            margin-top: 1.5rem;
-            padding: 0.4rem 0.9rem;
+            margin-top: 1rem;
+            padding: 0.35rem 0.85rem;
             background: rgba(0, 255, 136, 0.08);
             border: 1px solid rgba(0, 255, 136, 0.15);
             border-radius: 20px;
             color: #00ff88;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             position: relative;
             z-index: 1;
+            transition: all 0.3s;
         }
-        
+
+        .status-badge.error {
+            background: rgba(255, 59, 48, 0.08);
+            border-color: rgba(255, 59, 48, 0.15);
+            color: #ff6b6b;
+        }
+
+        .status-badge.error .status-dot { background: #ff6b6b; }
+
         .status-dot {
-            width: 7px;
-            height: 7px;
+            width: 6px;
+            height: 6px;
             background: #00ff88;
             border-radius: 50%;
             animation: blink 2s ease-in-out infinite;
         }
-        
+
         @keyframes blink {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
         }
-        
+
         /* Footer */
         footer {
             background: rgba(10, 10, 26, 0.9);
             border-top: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 1.25rem;
+            padding: 1rem;
             text-align: center;
             color: #5a6380;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
         }
-        
-        footer a { color: #00d2ff; text-decoration: none; }
+
+        /* Mobile */
+        @media (max-width: 640px) {
+            .top-bar { padding: 0.6rem 1rem; }
+            .top-logo { height: 32px; }
+            .main { padding: 4.5rem 0.75rem 1rem; }
+            .nex-heading { font-size: 1.6rem; }
+            .nex-avatar { width: 70px; height: 70px; }
+            .chat-messages { padding: 1rem; max-height: 50vh; }
+            .message-bubble { max-width: 92%; font-size: 0.88rem; }
+            .quick-btn { font-size: 0.78rem; padding: 0.4rem 0.8rem; }
+            .user-greeting { display: none; }
+        }
     </style>
 </head>
 <body>
     <header class="top-bar">
         <img src="logo.png" alt="MoreNET" class="top-logo">
-        <div style="display:flex;align-items:center;gap:1rem;">
-            <a href="/admin" id="adminLink" style="display:none;color:#8892b0;text-decoration:none;font-size:0.85rem;padding:0.4rem 0.8rem;border-radius:6px;transition:all 0.2s;" onmouseover="this.style.color='#00d2ff';this.style.background='rgba(0,210,255,0.08)'" onmouseout="this.style.color='#8892b0';this.style.background='transparent'">Admin</a>
-            <a href="#" onclick="logout()" style="color:#8892b0;text-decoration:none;font-size:0.85rem;padding:0.4rem 0.8rem;border-radius:6px;transition:all 0.2s;" onmouseover="this.style.color='#ff6b6b';this.style.background='rgba(255,59,48,0.08)'" onmouseout="this.style.color='#8892b0';this.style.background='transparent'">Logout</a>
+        <div class="top-bar-right">
+            <span class="user-greeting" id="userGreeting"></span>
+            <a href="/admin" id="adminLink" style="display:none" class="top-bar-link">Admin</a>
+            <a href="#" onclick="logout()" class="top-bar-link logout">Logout</a>
             <img src="nex.png" alt="NEX" class="top-avatar">
         </div>
     </header>
 
     <main class="main">
-        <div class="nex-intro">
+        <div class="nex-intro" id="nexIntro">
             <img src="nex.png" alt="NEX" class="nex-avatar">
             <h1 class="nex-heading">Welcome to <span>NEX</span></h1>
             <p class="nex-subtitle">Your friendly NEXt level Client Insights Specialist</p>
         </div>
 
+        <div class="quick-start" id="quickStart">
+            <button class="quick-btn" onclick="sendQuick('Show me all open tickets')"><span class="icon">🎫</span> Open tickets</button>
+            <button class="quick-btn" onclick="sendQuick('Show queue statistics')"><span class="icon">📊</span> Queue stats</button>
+            <button class="quick-btn" onclick="sendQuick('Search for a customer')"><span class="icon">👤</span> Find customer</button>
+            <button class="quick-btn" onclick="sendQuick('Search documentation')"><span class="icon">📖</span> Search docs</button>
+        </div>
+
         <div class="chat-container">
             <div class="chat-box">
+                <div class="chat-header">
+                    <button class="new-chat-btn" onclick="newConversation()">✦ New conversation</button>
+                </div>
                 <div class="chat-messages" id="chatMessages">
                     <div class="message">
                         <img src="nex.png" alt="NEX" class="message-avatar">
                         <div class="message-bubble">
-                            <strong>NEX</strong>
+                            <span class="sender">NEX</span>
                             Hey! I'm NEX, your MoreNET client insights specialist. Ask me anything about tickets, customers, or documentation. ⚡
                         </div>
                     </div>
                 </div>
                 <div class="chat-input-area">
-                    <input type="text" class="chat-input" id="chatInput" placeholder="Ask NEX something..." autocomplete="off">
-                    <button class="chat-send" id="chatSend">➤</button>
+                    <textarea class="chat-input" id="chatInput" placeholder="Ask NEX something..." rows="1"></textarea>
+                    <button class="chat-send" id="chatSend" title="Send">➤</button>
                 </div>
             </div>
         </div>
 
-        <div class="status-badge">
+        <div class="status-badge" id="statusBadge">
             <span class="status-dot"></span>
-            All systems operational
+            <span id="statusText">Checking...</span>
         </div>
     </main>
 
@@ -324,21 +566,82 @@
     <script>
         const input = document.getElementById('chatInput');
         const sendBtn = document.getElementById('chatSend');
-        const messages = document.getElementById('chatMessages');
+        const messagesEl = document.getElementById('chatMessages');
+        const quickStart = document.getElementById('quickStart');
+        const nexIntro = document.getElementById('nexIntro');
+        let userName = 'You';
+        let sending = false;
+        let userScrolledUp = false;
+        let messageCount = 0;
 
-        function addMessage(text, sender = 'You') {
+        // Track scroll position
+        messagesEl.addEventListener('scroll', () => {
+            const { scrollTop, scrollHeight, clientHeight } = messagesEl;
+            userScrolledUp = (scrollHeight - scrollTop - clientHeight) > 60;
+        });
+
+        // Auto-resize textarea
+        input.addEventListener('input', () => {
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        });
+
+        // Fetch user info
+        fetch('/api/me').then(r => r.json()).then(u => {
+            if (u.name) {
+                userName = u.name;
+                document.getElementById('userGreeting').innerHTML = 'Hi, <span>' + escapeHtml(u.name.split(' ')[0]) + '</span>';
+            }
+            if (u.role === 'admin') document.getElementById('adminLink').style.display = 'inline';
+        }).catch(() => {});
+
+        // Check health status
+        fetch('/health').then(r => r.json()).then(d => {
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+            if (d.status === 'ok') {
+                text.textContent = 'All systems operational';
+            } else {
+                badge.classList.add('error');
+                text.textContent = 'System issues detected';
+            }
+        }).catch(() => {
+            document.getElementById('statusBadge').classList.add('error');
+            document.getElementById('statusText').textContent = 'Connection error';
+        });
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function scrollToBottom() {
+            if (!userScrolledUp) {
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+        }
+
+        function addMessage(html, sender) {
+            messageCount++;
+            const isNex = sender === 'NEX';
             const div = document.createElement('div');
             div.className = 'message';
-            const isNex = sender === 'NEX';
             div.innerHTML = `
                 ${isNex ? '<img src="nex.png" alt="NEX" class="message-avatar">' : ''}
-                <div class="message-bubble" style="${!isNex ? 'margin-left: auto; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1);' : ''}">
-                    <strong style="${!isNex ? 'color: #8892b0;' : ''}">${sender}</strong>
-                    ${text}
+                <div class="message-bubble ${isNex ? '' : 'user-bubble'}">
+                    <span class="sender">${escapeHtml(sender)}</span>
+                    <div class="message-content">${html}</div>
                 </div>
             `;
-            messages.appendChild(div);
-            messages.scrollTop = messages.scrollHeight;
+            messagesEl.appendChild(div);
+            scrollToBottom();
+
+            // Compact the intro after first user message
+            if (messageCount > 1) {
+                nexIntro.classList.add('compact');
+                quickStart.classList.add('hidden');
+            }
         }
 
         function showTyping() {
@@ -355,8 +658,8 @@
                     </div>
                 </div>
             `;
-            messages.appendChild(div);
-            messages.scrollTop = messages.scrollHeight;
+            messagesEl.appendChild(div);
+            scrollToBottom();
         }
 
         function removeTyping() {
@@ -364,14 +667,13 @@
             if (t) t.remove();
         }
 
-        let sending = false;
-
         async function handleSend() {
             const text = input.value.trim();
             if (!text || sending) return;
             sending = true;
-            addMessage(text, 'You');
+            addMessage(escapeHtml(text), userName);
             input.value = '';
+            input.style.height = 'auto';
             sendBtn.disabled = true;
             showTyping();
 
@@ -384,7 +686,7 @@
                 removeTyping();
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    addMessage(err.error || 'Something went wrong. Please try again.', 'NEX');
+                    addMessage(escapeHtml(err.error || 'Something went wrong. Please try again.'), 'NEX');
                 } else {
                     const data = await res.json();
                     addMessage(formatMarkdown(data.reply || 'No response.'), 'NEX');
@@ -399,28 +701,151 @@
             }
         }
 
-        function formatMarkdown(text) {
-            return text
-                .replace(/```([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.3);padding:0.75rem;border-radius:8px;overflow-x:auto;margin:0.5rem 0;font-size:0.85rem;">$1</pre>')
-                .replace(/`([^`]+)`/g, '<code style="background:rgba(0,210,255,0.1);padding:0.15rem 0.4rem;border-radius:4px;font-size:0.85rem;">$1</code>')
-                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                .replace(/^- (.+)/gm, '• $1')
-                .replace(/\n/g, '<br>');
+        function sendQuick(text) {
+            input.value = text;
+            handleSend();
         }
 
+        function newConversation() {
+            // Clear chat UI
+            messagesEl.innerHTML = '';
+            messageCount = 0;
+            nexIntro.classList.remove('compact');
+            quickStart.classList.remove('hidden');
+
+            // Reset server-side history
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: '/reset' }),
+            }).catch(() => {});
+
+            // Re-add welcome message
+            const div = document.createElement('div');
+            div.className = 'message';
+            div.innerHTML = `
+                <img src="nex.png" alt="NEX" class="message-avatar">
+                <div class="message-bubble">
+                    <span class="sender">NEX</span>
+                    Hey! I'm NEX, your MoreNET client insights specialist. Ask me anything about tickets, customers, or documentation. ⚡
+                </div>
+            `;
+            messagesEl.appendChild(div);
+            input.focus();
+        }
+
+        // ── Markdown Formatter ──────────────────────────────
+        function formatMarkdown(text) {
+            // Escape HTML first to prevent XSS, then apply markdown
+            let html = escapeHtml(text);
+
+            // Code blocks (``` ... ```)
+            html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+                return '<pre><code>' + code.trim() + '</code></pre>';
+            });
+
+            // Inline code
+            html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+            // Tables
+            html = html.replace(/((?:^\|.+\|$\n?)+)/gm, (tableBlock) => {
+                const rows = tableBlock.trim().split('\n').filter(r => r.trim());
+                if (rows.length < 2) return tableBlock;
+
+                // Check for separator row
+                const sepIdx = rows.findIndex(r => /^\|[\s\-:|]+\|$/.test(r.trim()));
+                let headerRow = null;
+                let dataRows = rows;
+
+                if (sepIdx === 1) {
+                    headerRow = rows[0];
+                    dataRows = rows.slice(2);
+                } else if (sepIdx === -1) {
+                    // No separator — treat first row as header anyway
+                    headerRow = rows[0];
+                    dataRows = rows.slice(1);
+                }
+
+                const parseCells = (row) => row.split('|').slice(1, -1).map(c => c.trim());
+                let tableHtml = '<table>';
+
+                if (headerRow) {
+                    const headers = parseCells(headerRow);
+                    tableHtml += '<thead><tr>' + headers.map(h => '<th>' + h + '</th>').join('') + '</tr></thead>';
+                }
+
+                tableHtml += '<tbody>';
+                for (const row of dataRows) {
+                    const cells = parseCells(row);
+                    if (cells.length > 0 && cells.some(c => c)) {
+                        tableHtml += '<tr>' + cells.map(c => '<td>' + c + '</td>').join('') + '</tr>';
+                    }
+                }
+                tableHtml += '</tbody></table>';
+                return tableHtml;
+            });
+
+            // Headers (### and ####)
+            html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+
+            // Horizontal rules
+            html = html.replace(/^---+$/gm, '<hr>');
+
+            // Bold
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+            // Italic
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+            // Links: [text](url)
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+            // Bare URLs
+            html = html.replace(/(?<!["=])(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+
+            // Ordered lists (1. item)
+            html = html.replace(/((?:^\d+\. .+$\n?)+)/gm, (block) => {
+                const items = block.trim().split('\n').map(line => {
+                    return '<li>' + line.replace(/^\d+\.\s+/, '') + '</li>';
+                });
+                return '<ol>' + items.join('') + '</ol>';
+            });
+
+            // Unordered lists (- item or * item)
+            html = html.replace(/((?:^[-*] .+$\n?)+)/gm, (block) => {
+                const items = block.trim().split('\n').map(line => {
+                    return '<li>' + line.replace(/^[-*]\s+/, '') + '</li>';
+                });
+                return '<ul>' + items.join('') + '</ul>';
+            });
+
+            // Blockquotes
+            html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+            // Line breaks (but not inside block elements)
+            html = html.replace(/\n/g, '<br>');
+
+            // Clean up extra breaks after block elements
+            html = html.replace(/<\/(table|pre|ol|ul|blockquote|h[34]|hr)><br>/g, '</$1>');
+            html = html.replace(/<br><(table|pre|ol|ul|blockquote|h[34]|hr)/g, '<$1');
+
+            return html;
+        }
+
+        // ── Event Listeners ─────────────────────────────────
         sendBtn.addEventListener('click', handleSend);
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSend(); });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
 
         async function logout() {
             await fetch('/api/logout', { method: 'POST' });
             window.location.href = '/login';
         }
-
-        // Show admin link if user is admin
-        fetch('/api/me').then(r => r.json()).then(u => {
-            if (u.role === 'admin') document.getElementById('adminLink').style.display = 'inline';
-        }).catch(() => {});
     </script>
 </body>
 </html>
