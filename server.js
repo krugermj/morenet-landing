@@ -442,6 +442,8 @@ const SHERPA_TOOLS = [
   { type: 'function', function: { name: 'zammad_ticket', description: 'Get a specific Zammad ticket by ID', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Ticket ID number' } }, required: ['id'] } } },
   { type: 'function', function: { name: 'zammad_customer', description: 'Look up a Zammad customer by name or email', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Customer name or email' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'zammad_stats', description: 'Get Zammad ticket statistics overview', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'zammad_agents', description: 'List all agents with their ticket counts and state breakdown (who owns how many tickets)', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'zammad_aging', description: 'Ticket age report: age distribution, oldest tickets, stalest tickets, average age by state', parameters: { type: 'object', properties: { top: { type: 'string', description: 'Number of oldest/stalest to show (default 10)' } } } } },
   { type: 'function', function: { name: 'xwiki_search', description: 'Search XWiki documentation', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'xwiki_get', description: 'Get a specific XWiki page by ID', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Page ID' } }, required: ['id'] } } },
 ];
@@ -451,6 +453,8 @@ const TOOL_COMMANDS = {
   zammad_ticket: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'ticket', String(args.id || '')],
   zammad_customer: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'customer', args.query || ''],
   zammad_stats: () => ['python3', path.join(__dirname, 'zammad.py'), 'stats'],
+  zammad_agents: () => ['python3', path.join(__dirname, 'zammad.py'), 'agents'],
+  zammad_aging: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'aging', '--top', String(args.top || '10')],
   xwiki_search: (args) => ['python3', path.join(__dirname, 'xwiki.py'), 'search', args.query || ''],
   xwiki_get: (args) => ['python3', path.join(__dirname, 'xwiki.py'), 'get', String(args.id || '')],
 };
