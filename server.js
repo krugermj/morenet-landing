@@ -438,9 +438,9 @@ const SHERPA_SYSTEM = `You are NEX, a client insights specialist for MoreNET / I
 3. **XWiki** — internal documentation, client notes, technical procedures, AND client listings organized by building/estate/location (e.g. "Mzuri Estate > Customers > Client Name")
 4. **Escalate** — flag for senior support when you can't answer
 
-## CRITICAL: Cross-Reference ALL Systems
-When asked about a person or customer, **ALWAYS query ALL relevant systems**, not just one:
-- **Customer lookup** → search Zammad (customer profile + tickets) AND billing (client financials + services) AND XWiki (documentation/notes)
+## CRITICAL: Use client_lookup for ANY customer/person/company query
+When asked about a person, customer, or company, **ALWAYS use the client_lookup tool FIRST** — it searches all three systems (Zammad + Billing + XWiki) in one call and returns combined results. Do NOT call zammad_search, billing_client, or xwiki_search separately for customer lookups.
+- **Customer lookup** → use client_lookup (one tool call, all three systems)
 - **Ticket inquiry** → get ticket details AND look up the customer in billing for account context
 - **Building/estate/location queries** (e.g. "clients in Mzuri", "who's at Mushroom Farm") → search XWiki first (buildings and client lists are stored there)
 - **General questions** → search XWiki for docs AND Zammad for related tickets
@@ -471,6 +471,7 @@ DO NOT stop after querying one system. The user expects a COMPREHENSIVE answer c
 - Be professional but friendly — South African warm, not corporate cold`;
 
 const SHERPA_TOOLS = [
+  { type: 'function', function: { name: 'client_lookup', description: 'COMPREHENSIVE client lookup — searches ALL systems at once: Zammad (customer + tickets), Billing (financials + services + annuities), and XWiki (documentation). USE THIS FIRST when asked about any client, customer, company, or person. Returns combined results from all three systems.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'Client name, company name, or person name to search for' } }, required: ['name'] } } },
   { type: 'function', function: { name: 'zammad_tickets', description: 'List tickets filtered by state. Use for "show me all open tickets", "list new tickets", "pending tickets", etc. Returns ticket number, title, state, owner, and dates.', parameters: { type: 'object', properties: { state: { type: 'string', description: 'Filter by state: new, open, pending, closed, pending_close, or all (default: open)', enum: ['new', 'open', 'pending', 'closed', 'pending_close', 'all'] }, limit: { type: 'string', description: 'Max tickets to return (default 25)' } } } } },
   { type: 'function', function: { name: 'zammad_search', description: 'Search Zammad tickets by keyword. Use for finding tickets by customer name, subject, content, etc.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query — can be customer name, keyword, ticket number, etc.' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'zammad_ticket', description: 'Get full details of a specific ticket including all articles/messages. Accepts ticket number (e.g. 43274489) or internal ID.', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Ticket number or internal ID' } }, required: ['id'] } } },
@@ -489,6 +490,7 @@ const SHERPA_TOOLS = [
 ];
 
 const TOOL_COMMANDS = {
+  client_lookup: (args) => ['python3', path.join(__dirname, 'client_lookup.py'), args.name || ''],
   zammad_tickets: (args) => {
     const cmd = ['python3', path.join(__dirname, 'zammad.py'), 'tickets'];
     if (args.state) cmd.push('--state', String(args.state));
