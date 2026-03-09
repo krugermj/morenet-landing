@@ -1,0 +1,28 @@
+services:
+  nex-portal:
+    build: .
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - nex-data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
+      - "traefik.http.routers.nex-portal.entrypoints=https"
+      - "traefik.http.routers.nex-portal.rule=Host(`nex.morenet.co.za`)"
+      - "traefik.http.routers.nex-portal.tls=true"
+      - "traefik.http.routers.nex-portal.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.nex-portal.service=nex-portal"
+      - "traefik.http.services.nex-portal.loadbalancer.server.port=80"
+    networks:
+      - coolify
+
+volumes:
+  nex-data:
+    name: nex-portal-data
+    external: false
+
+networks:
+  coolify:
+    external: true
