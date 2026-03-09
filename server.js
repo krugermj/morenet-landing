@@ -690,17 +690,6 @@ app.get('/api/admin/escalations', apiAuthMiddleware, adminMiddleware, async (req
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Protected App ────────────────────────────────────────
-app.get('/', authMiddleware, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/api/me', apiAuthMiddleware, (req, res) => {
-  res.json(req.user);
-});
-
-app.use(authMiddleware, express.static(path.join(__dirname, 'public')));
-
 // ── Internal DB API (locked to NEX gateway) ─────────────
 const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN || '';
 const INTERNAL_API_ALLOWED_IPS = (process.env.INTERNAL_API_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -780,6 +769,17 @@ app.get('/api/internal/stats', internalApiAuth, async (req, res) => {
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// ── Protected App ────────────────────────────────────────
+app.get('/', authMiddleware, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/api/me', apiAuthMiddleware, (req, res) => {
+  res.json(req.user);
+});
+
+app.use(authMiddleware, express.static(path.join(__dirname, 'public')));
 
 // ── Start ────────────────────────────────────────────────
 async function start() {
