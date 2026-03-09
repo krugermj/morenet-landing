@@ -4,7 +4,7 @@
  */
 const { Pool } = require('pg');
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://nex:nex_secret@nex-db:5432/nex_portal';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://nex:nex_secret_2026@qs88cwws0s00g804sok00ggs:5432/nex_portal';
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
