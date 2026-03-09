@@ -450,7 +450,7 @@ DO NOT stop after querying one system. The user expects a COMPREHENSIVE answer c
 ## How to Answer Well
 1. **Use multiple tools per question** — a customer lookup should trigger 3+ tool calls (Zammad customer, billing client, XWiki search)
 2. **Be thorough** — include all relevant details: contact info, address, account numbers, ticket history, financial status, service details
-3. **Format with markdown** — use tables for lists, bold for key info, sections with headers for different data sources
+3. **Format with markdown** — use tables for lists, bold for key info, sections with headers for different data sources. NEVER dump raw JSON to the user — always format tool output into readable tables or bullet lists
 4. **Structure your answer by source** — e.g. "### Contact Details (Zammad)" then "### Billing & Services" then "### Ticket History" then "### Documentation"
 5. **Ticket numbers** — always show the display number (7+ digits) and link: https://z.ictglobe.support/#ticket/zoom/{internal_id}
 6. **Money** — billing amounts are in Rands (ZAR). Show outstanding balances prominently.
@@ -475,7 +475,7 @@ const SHERPA_TOOLS = [
   { type: 'function', function: { name: 'zammad_ticket', description: 'Get full details of a specific ticket including all articles/messages. Accepts ticket number (e.g. 43274489) or internal ID.', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Ticket number or internal ID' } }, required: ['id'] } } },
   { type: 'function', function: { name: 'zammad_customer', description: 'Look up a customer by name, email, or phone. Returns customer profile and their tickets.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Customer name, email, or phone number' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'zammad_stats', description: 'Get ticket queue statistics — counts by state (new, open, pending, etc.)', parameters: { type: 'object', properties: {} } } },
-  { type: 'function', function: { name: 'zammad_agents', description: 'List all support agents with their ticket counts broken down by state. Shows workload distribution.', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'zammad_agents', description: 'List all support agents with their ticket counts broken down by state AND by group. Shows workload distribution per agent per group. Use for "breakdown per agent per group" questions.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'zammad_aging', description: 'Ticket age report: age distribution buckets, oldest tickets, stalest (least recently updated) tickets, average age by state.', parameters: { type: 'object', properties: { top: { type: 'string', description: 'Number of oldest/stalest to show (default 10)' } } } } },
   { type: 'function', function: { name: 'zammad_today', description: 'Get tickets created today (or a specific date). Shows total count, breakdown by state, and a list of tickets with titles. Use when asked "how many tickets today" or about daily intake.', parameters: { type: 'object', properties: { date: { type: 'string', description: 'Date in YYYY-MM-DD format (default: today)' } } } } },
   { type: 'function', function: { name: 'xwiki_search', description: 'Search the MoreNET documentation wiki for procedures, guides, and knowledge base articles.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },

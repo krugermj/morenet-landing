@@ -169,7 +169,7 @@ def cmd_agents(args):
             if not isinstance(data, list) or not data:
                 break
             for t in data:
-                all_tickets.append((t["owner_id"], sname))
+                all_tickets.append((t["owner_id"], sname, t.get("group_id", 0)))
             if len(data) < 200:
                 break
             page += 1
@@ -178,9 +178,11 @@ def cmd_agents(args):
         print("No non-closed tickets found.")
         return
 
-    # Resolve owner names (cache to avoid repeat lookups)
+    # Resolve owner names and group names (cache to avoid repeat lookups)
     owner_ids = set(t[0] for t in all_tickets)
+    group_ids = set(t[2] for t in all_tickets)
     owner_names = {}
+    group_names = {}
     for oid in owner_ids:
         if oid == 1:
             owner_names[oid] = "Unassigned"
@@ -190,20 +192,30 @@ def cmd_agents(args):
                 owner_names[oid] = f"{u.get('firstname', '')} {u.get('lastname', '')}".strip() or f"User {oid}"
             except:
                 owner_names[oid] = f"User {oid}"
+    for gid in group_ids:
+        try:
+            g = api("GET", f"groups/{gid}")
+            group_names[gid] = g.get("name", f"Group {gid}")
+        except:
+            group_names[gid] = f"Group {gid}"
 
-    # Aggregate
+    # Aggregate per agent
     counts = Counter()
     by_state = defaultdict(lambda: Counter())
-    for oid, state in all_tickets:
+    by_group = defaultdict(lambda: Counter())
+    for oid, state, gid in all_tickets:
         name = owner_names[oid]
+        gname = group_names[gid]
         counts[name] += 1
         by_state[name][state] += 1
+        by_group[name][gname] += 1
 
     # Output as structured JSON
     result = []
     for name, total in sorted(counts.items(), key=lambda x: -x[1]):
         entry = {"agent": name, "total": total}
-        entry.update(by_state[name])
+        entry["by_state"] = dict(by_state[name])
+        entry["by_group"] = dict(by_group[name])
         result.append(entry)
 
     output = {
