@@ -72,7 +72,51 @@ def cmd_tickets(args):
         sid = state_id_map.get(state_filter, 2)
         data = api("GET", f"tickets/search?query=state_id:{sid}&per_page={limit}")
         tickets = data if isinstance(data, list) else []
-    
+
+    # Resolve owner, customer, and group names (cached)
+    owner_cache = {}
+    group_cache = {}
+    customer_cache = {}
+
+    def resolve_user(uid):
+        if uid in owner_cache:
+            return owner_cache[uid]
+        if uid == 1:
+            owner_cache[uid] = "Unassigned"
+            return "Unassigned"
+        try:
+            u = api("GET", f"users/{uid}")
+            name = f"{u.get('firstname', '')} {u.get('lastname', '')}".strip() or f"User {uid}"
+            owner_cache[uid] = name
+            return name
+        except:
+            owner_cache[uid] = f"User {uid}"
+            return owner_cache[uid]
+
+    def resolve_group(gid):
+        if gid in group_cache:
+            return group_cache[gid]
+        try:
+            g = api("GET", f"groups/{gid}")
+            name = g.get("name", f"Group {gid}")
+            group_cache[gid] = name
+            return name
+        except:
+            group_cache[gid] = f"Group {gid}"
+            return group_cache[gid]
+
+    def resolve_customer(cid):
+        if cid in customer_cache:
+            return customer_cache[cid]
+        try:
+            u = api("GET", f"users/{cid}")
+            name = f"{u.get('firstname', '')} {u.get('lastname', '')}".strip() or u.get("email", f"Customer {cid}")
+            customer_cache[cid] = name
+            return name
+        except:
+            customer_cache[cid] = f"Customer {cid}"
+            return customer_cache[cid]
+
     output = []
     for t in tickets[:limit]:
         if isinstance(t, dict):
@@ -82,13 +126,13 @@ def cmd_tickets(args):
                 "number": t.get("number"),
                 "title": t.get("title"),
                 "state": state_name_map.get(sid, f"state_{sid}"),
-                "owner_id": t.get("owner_id"),
-                "customer_id": t.get("customer_id"),
-                "group_id": t.get("group_id"),
+                "owner": resolve_user(t.get("owner_id", 1)),
+                "customer": resolve_customer(t.get("customer_id", 0)),
+                "group": resolve_group(t.get("group_id", 0)),
                 "created_at": t.get("created_at"),
                 "updated_at": t.get("updated_at"),
             })
-    
+
     if not output:
         print(json.dumps({"status": "NO RESULTS FOUND", "message": f"No {state_filter} tickets found."}))
     else:
@@ -338,16 +382,32 @@ def cmd_today(args):
     state_map = {1: "new", 2: "open", 3: "pending reminder", 4: "closed", 7: "pending close"}
     by_state = Counter()
     by_group = Counter()
+    # Resolve group names
+    group_cache = {}
+    def resolve_group(gid):
+        if gid in group_cache:
+            return group_cache[gid]
+        try:
+            g = api("GET", f"groups/{gid}")
+            name = g.get("name", f"Group {gid}")
+            group_cache[gid] = name
+            return name
+        except:
+            group_cache[gid] = f"Group {gid}"
+            return group_cache[gid]
+
     summaries = []
     for t in tickets:
         sid = t.get("state_id", 0)
+        gid = t.get("group_id", 0)
+        gname = resolve_group(gid)
         by_state[state_map.get(sid, f"state_{sid}")] += 1
-        by_group[t.get("group_id", "unknown")] += 1
+        by_group[gname] += 1
         summaries.append({
             "number": t.get("number"),
             "title": t.get("title", ""),
             "state": state_map.get(sid, f"state_{sid}"),
-            "customer_id": t.get("customer_id"),
+            "group": gname,
             "created_at": t.get("created_at"),
         })
     result = {
