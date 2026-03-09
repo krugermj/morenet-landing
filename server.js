@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,35 +41,25 @@ if (LOCAL_AUTH_ENABLED) {
   try { bcrypt = require('bcryptjs'); } catch { console.warn('bcryptjs not available — local auth disabled'); }
 }
 
-// ── User Store ───────────────────────────────────────────
+// ── User Store (PostgreSQL) ──────────────────────────────
+// Legacy DATA_FILE path kept for escalation Telegram handler reference
 const DATA_FILE = process.env.DATA_FILE || '/app/data/users.json';
 
-function loadUsers() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+// Seed local admin on startup (async, runs after DB init)
+async function seedAdmin() {
+  if (LOCAL_AUTH_ENABLED && bcrypt) {
+    const existing = await db.findUserByEmail(ADMIN_EMAIL);
+    if (!existing) {
+      await db.upsertUser({
+        email: ADMIN_EMAIL,
+        password: bcrypt.hashSync(ADMIN_PASS, 10),
+        name: 'Admin',
+        role: 'admin',
+        auth: 'local',
+      });
+      console.log(`Local admin seeded: ${ADMIN_EMAIL}`);
     }
-  } catch (e) { console.error('Error loading users:', e.message); }
-  return [];
-}
-
-function saveUsers(users) {
-  const dir = path.dirname(DATA_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
-}
-
-let users = loadUsers();
-
-// Seed local admin for fallback mode
-if (LOCAL_AUTH_ENABLED && bcrypt && !users.find(u => u.email === ADMIN_EMAIL)) {
-  users.push({
-    id: 1, email: ADMIN_EMAIL, password: bcrypt.hashSync(ADMIN_PASS, 10),
-    name: 'Admin', role: 'admin', auth: 'local',
-    created_at: new Date().toISOString(), last_login: null
-  });
-  saveUsers(users);
-  console.log(`Local admin seeded: ${ADMIN_EMAIL}`);
+  }
 }
 
 // ── Rate Limiter ─────────────────────────────────────────
@@ -114,44 +105,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-function resolveRole(email, authentikGroups) {
-  // Check Authentik groups first
+async function resolveRole(email, authentikGroups) {
   if (authentikGroups && authentikGroups.includes(ADMIN_GROUP)) return 'admin';
-  // Check admin email list
   if (ADMIN_EMAILS.includes(email.toLowerCase())) return 'admin';
-  // Check local store
-  users = loadUsers();
-  const existing = users.find(u => u.email === email.toLowerCase());
+  const existing = await db.findUserByEmail(email);
   if (existing) return existing.role;
   return 'user';
 }
 
-function upsertUser(email, name, groups, authMethod) {
-  users = loadUsers();
-  let user = users.find(u => u.email === email.toLowerCase());
-  const role = resolveRole(email, groups);
-
-  if (user) {
-    user.name = name || user.name;
-    user.role = role;
-    user.last_login = new Date().toISOString();
-    user.auth = authMethod;
-    if (groups) user.groups = groups;
-  } else {
-    user = {
-      id: Math.max(...users.map(u => u.id), 0) + 1,
-      email: email.toLowerCase().trim(),
-      name: name || '',
-      role,
-      auth: authMethod,
-      groups: groups || [],
-      created_at: new Date().toISOString(),
-      last_login: new Date().toISOString()
-    };
-    users.push(user);
-  }
-  saveUsers(users);
-  return user;
+async function upsertUserRecord(email, name, groups, authMethod) {
+  const role = await resolveRole(email, groups);
+  return db.upsertUser({ email, name, role, auth: authMethod, groups });
 }
 
 function authMiddleware(req, res, next) {
@@ -326,7 +290,7 @@ app.get('/auth/callback', async (req, res) => {
     }
 
     // Upsert user and issue session token
-    const user = upsertUser(email, name, groups, 'authentik');
+    const user = await upsertUserRecord(email, name, groups, 'authentik');
     issueToken(res, user);
     rateLimitReset(ip);
 
@@ -342,7 +306,7 @@ app.get('/auth/callback', async (req, res) => {
 
 // ── Local Auth Fallback (dev only) ───────────────────────
 if (LOCAL_AUTH_ENABLED && bcrypt) {
-  app.post('/api/login', (req, res) => {
+  app.post('/api/login', async (req, res) => {
     const ip = req.ip;
     const rateCheck = rateLimitCheck(ip);
     if (!rateCheck.allowed) {
@@ -352,18 +316,21 @@ if (LOCAL_AUTH_ENABLED && bcrypt) {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-    users = loadUsers();
-    const user = users.find(u => u.email === email.toLowerCase().trim());
-    if (!user || !user.password || !bcrypt.compareSync(password, user.password)) {
-      rateLimitRecord(ip);
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    try {
+      const user = await db.findUserByEmail(email);
+      if (!user || !user.password || !bcrypt.compareSync(password, user.password)) {
+        rateLimitRecord(ip);
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
 
-    user.last_login = new Date().toISOString();
-    saveUsers(users);
-    rateLimitReset(ip);
-    issueToken(res, user);
-    res.json({ success: true, name: user.name, role: user.role });
+      await db.upsertUser({ email: user.email, auth: 'local' }); // updates last_login
+      rateLimitReset(ip);
+      issueToken(res, user);
+      res.json({ success: true, name: user.name, role: user.role });
+    } catch (err) {
+      console.error('Login error:', err.message);
+      res.status(500).json({ error: 'Server error' });
+    }
   });
 }
 
@@ -387,41 +354,38 @@ app.get('/api/auth-info', apiAuthMiddleware, (req, res) => {
   res.json({ mode: OIDC_ENABLED ? 'authentik' : 'local', authentikUrl: AUTHENTIK_URL || null });
 });
 
-app.get('/api/users', apiAuthMiddleware, adminMiddleware, (req, res) => {
-  users = loadUsers();
-  const safeUsers = users.map(u => ({
-    id: u.id, email: u.email, name: u.name, role: u.role,
-    auth: u.auth || 'local', groups: u.groups || [],
-    created_at: u.created_at, last_login: u.last_login
-  }));
-  res.json(safeUsers);
+app.get('/api/users', apiAuthMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const users = await db.loadUsers();
+    const safeUsers = users.map(u => ({
+      id: u.id, email: u.email, name: u.name, role: u.role,
+      auth: u.auth || 'local', groups: u.groups || [],
+      created_at: u.created_at, last_login: u.last_login
+    }));
+    res.json(safeUsers);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/users/:id', apiAuthMiddleware, adminMiddleware, (req, res) => {
-  const userId = parseInt(req.params.id);
-  users = loadUsers();
-  const user = users.find(u => u.id === userId);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  const { name, role } = req.body;
-  if (name !== undefined) user.name = name;
-  if (role !== undefined) {
-    if (userId === req.user.id && role !== 'admin') {
+app.put('/api/users/:id', apiAuthMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { name, role } = req.body;
+    if (role !== undefined && userId === req.user.id && role !== 'admin') {
       return res.status(400).json({ error: 'Cannot remove your own admin role' });
     }
-    user.role = role;
-  }
-  saveUsers(users);
-  res.json({ success: true });
+    const updated = await db.updateUser(userId, { name, role });
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/users/:id', apiAuthMiddleware, adminMiddleware, (req, res) => {
-  const userId = parseInt(req.params.id);
-  if (userId === req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
-  users = loadUsers();
-  users = users.filter(u => u.id !== userId);
-  saveUsers(users);
-  res.json({ success: true });
+app.delete('/api/users/:id', apiAuthMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    if (userId === req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
+    await db.deleteUser(userId);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Sherpa Chat (AI Assistant) ────────────────────────────
@@ -552,13 +516,7 @@ function handleEscalation(args) {
   };
 
   // Save to escalations log
-  const escFile = path.join(path.dirname(DATA_FILE), 'escalations.json');
-  let escalations = [];
-  try { escalations = JSON.parse(fs.readFileSync(escFile, 'utf8')); } catch {}
-  escalations.push(escalation);
-  // Keep last 500 escalations
-  if (escalations.length > 500) escalations = escalations.slice(-500);
-  fs.writeFileSync(escFile, JSON.stringify(escalations, null, 2));
+  db.saveEscalation(escalation).catch(err => console.error('Failed to save escalation:', err.message));
 
   // Send Telegram notification to admin
   if (TELEGRAM_BOT_TOKEN && TELEGRAM_ADMIN_CHAT_ID) {
@@ -578,78 +536,8 @@ function handleEscalation(args) {
   return `Escalation logged (ID: ${escalation.id}). The senior support team has been notified and will follow up.`;
 }
 
-// ── Chat Persistence ────────────────────────────────────
-const CHATS_DIR = path.join(path.dirname(DATA_FILE), 'chats');
-if (!fs.existsSync(CHATS_DIR)) fs.mkdirSync(CHATS_DIR, { recursive: true });
-
-function getChatFile(userId) {
-  // One file per user per day
-  const date = new Date().toISOString().slice(0, 10);
-  const safeUser = userId.replace(/[^a-zA-Z0-9@._-]/g, '_');
-  return path.join(CHATS_DIR, `${safeUser}_${date}.json`);
-}
-
-function loadChat(userId) {
-  const file = getChatFile(userId);
-  try {
-    if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, 'utf8'));
-    }
-  } catch {}
-  return { userId, date: new Date().toISOString().slice(0, 10), messages: [] };
-}
-
-function saveChat(chatData) {
-  const file = getChatFile(chatData.userId);
-  fs.writeFileSync(file, JSON.stringify(chatData, null, 2));
-}
-
-// Chat review metadata (separate file to avoid modifying chat logs)
-const CHAT_META_FILE = path.join(path.dirname(DATA_FILE), 'chat-meta.json');
-
-function loadChatMeta() {
-  try { return JSON.parse(fs.readFileSync(CHAT_META_FILE, 'utf8')); } catch { return {}; }
-}
-
-function saveChatMeta(meta) {
-  fs.writeFileSync(CHAT_META_FILE, JSON.stringify(meta, null, 2));
-}
-
-function listChats(limit = 50, showReviewed = false) {
-  try {
-    const meta = loadChatMeta();
-    const files = fs.readdirSync(CHATS_DIR)
-      .filter(f => f.endsWith('.json'))
-      .sort()
-      .reverse();
-
-    const results = [];
-    for (const f of files) {
-      const reviewed = meta[f]?.reviewed || false;
-      if (!showReviewed && reviewed) continue;
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(CHATS_DIR, f), 'utf8'));
-        results.push({
-          file: f,
-          userId: data.userId,
-          date: data.date,
-          messageCount: data.messages.length,
-          lastMessage: data.messages.length > 0 ? data.messages[data.messages.length - 1].timestamp : null,
-          reviewed,
-          reviewedBy: meta[f]?.reviewedBy || null,
-        });
-      } catch { results.push({ file: f, error: true }); }
-      if (results.length >= limit) break;
-    }
-    return results;
-  } catch { return []; }
-}
-
-function getChatDetail(filename) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(CHATS_DIR, filename), 'utf8'));
-  } catch { return null; }
-}
+// ── Chat Persistence (PostgreSQL) ────────────────────────
+// All chat persistence now handled by db.js
 
 async function callLLM(messages, tools) {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -698,13 +586,7 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
   if (context.length > MAX_CONTEXT) context.splice(0, context.length - MAX_CONTEXT);
 
   // Persist user message
-  const chatData = loadChat(userId);
-  chatData.messages.push({
-    role: 'user',
-    content: message,
-    timestamp: new Date().toISOString(),
-    userName,
-  });
+  await db.saveChatMessage({ userEmail: userId, userName, role: 'user', content: message });
 
   const messages = [
     { role: 'system', content: SHERPA_SYSTEM },
@@ -740,12 +622,9 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
           messages.push({ role: 'tool', tool_call_id: tc.id, content: result });
 
           // Log tool calls to chat history
-          chatData.messages.push({
-            role: 'tool',
-            tool: tc.function.name,
-            args,
-            result: result.substring(0, 2000),
-            timestamp: new Date().toISOString(),
+          await db.saveChatMessage({
+            userEmail: userId, userName, role: 'tool',
+            toolName: tc.function.name, toolArgs: args, toolResult: result.substring(0, 4000),
           });
         }
         attempts++;
@@ -758,71 +637,57 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
       if (context.length > MAX_CONTEXT) context.splice(0, context.length - MAX_CONTEXT);
 
       // Persist assistant response
-      chatData.messages.push({
-        role: 'assistant',
-        content: reply,
-        timestamp: new Date().toISOString(),
-        model: SHERPA_MODEL,
-      });
-      saveChat(chatData);
+      await db.saveChatMessage({ userEmail: userId, userName, role: 'assistant', content: reply, model: SHERPA_MODEL });
 
       return res.json({ reply });
     }
 
     const fallback = 'I hit my tool usage limit for this question. Try rephrasing or I can escalate this for you.';
-    chatData.messages.push({ role: 'assistant', content: fallback, timestamp: new Date().toISOString() });
-    saveChat(chatData);
+    await db.saveChatMessage({ userEmail: userId, userName, role: 'assistant', content: fallback });
     return res.json({ reply: fallback });
   } catch (err) {
     console.error('Sherpa error:', err.message);
-    chatData.messages.push({ role: 'error', content: err.message, timestamp: new Date().toISOString() });
-    saveChat(chatData);
+    await db.saveChatMessage({ userEmail: userId, userName, role: 'error', content: err.message }).catch(() => {});
     return res.status(500).json({ error: 'Sherpa encountered an error. Please try again.' });
   }
 });
 
 // ── Admin: Chat History API ─────────────────────────────
-app.get('/api/admin/chats', apiAuthMiddleware, adminMiddleware, (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
-  const showReviewed = req.query.reviewed === 'true';
-  res.json(listChats(limit, showReviewed));
+app.get('/api/admin/chats', apiAuthMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const showReviewed = req.query.reviewed === 'true';
+    res.json(await db.listChats(limit, showReviewed));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/admin/chats/:filename', apiAuthMiddleware, adminMiddleware, (req, res) => {
-  const filename = req.params.filename.replace(/[^a-zA-Z0-9@._-]/g, '');
-  const data = getChatDetail(filename + '.json');
-  if (!data) return res.status(404).json({ error: 'Chat not found' });
-  // Attach review status
-  const meta = loadChatMeta();
-  data._reviewed = meta[filename + '.json']?.reviewed || false;
-  data._reviewedBy = meta[filename + '.json']?.reviewedBy || null;
-  data._reviewedAt = meta[filename + '.json']?.reviewedAt || null;
-  res.json(data);
+app.get('/api/admin/chats/:chatKey', apiAuthMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const chatKey = req.params.chatKey.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const data = await db.getChatDetail(chatKey);
+    if (!data || data.messages.length === 0) return res.status(404).json({ error: 'Chat not found' });
+    const meta = await db.getChatMeta(chatKey);
+    data._reviewed = meta?.reviewed || false;
+    data._reviewedBy = meta?.reviewed_by || null;
+    data._reviewedAt = meta?.reviewed_at || null;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.patch('/api/admin/chats/:filename/review', apiAuthMiddleware, adminMiddleware, (req, res) => {
-  const filename = req.params.filename.replace(/[^a-zA-Z0-9@._-]/g, '') + '.json';
-  const fullPath = path.join(CHATS_DIR, filename);
-  if (!fs.existsSync(fullPath)) return res.status(404).json({ error: 'Chat not found' });
-
-  const meta = loadChatMeta();
-  const { reviewed } = req.body;
-  meta[filename] = {
-    reviewed: !!reviewed,
-    reviewedBy: req.user.email,
-    reviewedAt: new Date().toISOString(),
-  };
-  saveChatMeta(meta);
-  res.json({ success: true, reviewed: !!reviewed });
+app.patch('/api/admin/chats/:chatKey/review', apiAuthMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const chatKey = req.params.chatKey.replace(/[^a-zA-Z0-9@._-]/g, '');
+    const { reviewed } = req.body;
+    await db.setChatMeta(chatKey, { reviewed: !!reviewed, reviewedBy: req.user.email });
+    res.json({ success: true, reviewed: !!reviewed });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Admin: Escalations API ──────────────────────────────
-app.get('/api/admin/escalations', apiAuthMiddleware, adminMiddleware, (req, res) => {
-  const escFile = path.join(path.dirname(DATA_FILE), 'escalations.json');
+app.get('/api/admin/escalations', apiAuthMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const data = JSON.parse(fs.readFileSync(escFile, 'utf8'));
-    res.json(data.reverse());
-  } catch { res.json([]); }
+    res.json(await db.listEscalations());
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── Protected App ────────────────────────────────────────
@@ -837,6 +702,17 @@ app.get('/api/me', apiAuthMiddleware, (req, res) => {
 app.use(authMiddleware, express.static(path.join(__dirname, 'public')));
 
 // ── Start ────────────────────────────────────────────────
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`NEX Portal running on port ${PORT} [auth: ${OIDC_ENABLED ? 'Authentik OIDC' : 'local'}]`);
-});
+async function start() {
+  try {
+    await db.initDB();
+    await seedAdmin();
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`NEX Portal running on port ${PORT} [auth: ${OIDC_ENABLED ? 'Authentik OIDC' : 'local'}] [storage: PostgreSQL]`);
+    });
+  } catch (err) {
+    console.error('Failed to start:', err.message);
+    process.exit(1);
+  }
+}
+
+start();

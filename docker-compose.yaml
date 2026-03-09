@@ -4,8 +4,10 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-    volumes:
-      - /opt/nex-portal-data:/app/data
+      - DATABASE_URL=postgresql://nex:nex_secret_2026@nex-db:5432/nex_portal
+    depends_on:
+      nex-db:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=coolify"
@@ -17,7 +19,30 @@ services:
       - "traefik.http.services.nex-portal.loadbalancer.server.port=80"
     networks:
       - coolify
+      - internal
+
+  nex-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nex
+      POSTGRES_PASSWORD: nex_secret_2026
+      POSTGRES_DB: nex_portal
+    volumes:
+      - nex-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nex -d nex_portal"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - internal
+
+volumes:
+  nex-pgdata:
 
 networks:
   coolify:
     external: true
+  internal:
+    driver: bridge
