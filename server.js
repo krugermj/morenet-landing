@@ -471,6 +471,7 @@ DO NOT stop after querying one system. The user expects a COMPREHENSIVE answer c
 - Be professional but friendly — South African warm, not corporate cold`;
 
 const SHERPA_TOOLS = [
+  { type: 'function', function: { name: 'zammad_tickets', description: 'List tickets filtered by state. Use for "show me all open tickets", "list new tickets", "pending tickets", etc. Returns ticket number, title, state, owner, and dates.', parameters: { type: 'object', properties: { state: { type: 'string', description: 'Filter by state: new, open, pending, closed, pending_close, or all (default: open)', enum: ['new', 'open', 'pending', 'closed', 'pending_close', 'all'] }, limit: { type: 'string', description: 'Max tickets to return (default 25)' } } } } },
   { type: 'function', function: { name: 'zammad_search', description: 'Search Zammad tickets by keyword. Use for finding tickets by customer name, subject, content, etc.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query — can be customer name, keyword, ticket number, etc.' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'zammad_ticket', description: 'Get full details of a specific ticket including all articles/messages. Accepts ticket number (e.g. 43274489) or internal ID.', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Ticket number or internal ID' } }, required: ['id'] } } },
   { type: 'function', function: { name: 'zammad_customer', description: 'Look up a customer by name, email, or phone. Returns customer profile and their tickets.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Customer name, email, or phone number' } }, required: ['query'] } } },
@@ -488,6 +489,12 @@ const SHERPA_TOOLS = [
 ];
 
 const TOOL_COMMANDS = {
+  zammad_tickets: (args) => {
+    const cmd = ['python3', path.join(__dirname, 'zammad.py'), 'tickets'];
+    if (args.state) cmd.push('--state', String(args.state));
+    if (args.limit) cmd.push('--limit', String(args.limit));
+    return cmd;
+  },
   zammad_search: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'search', args.query || ''],
   zammad_ticket: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'ticket', String(args.id || '')],
   zammad_customer: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'customer', args.query || ''],

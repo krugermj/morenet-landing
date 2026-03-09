@@ -56,31 +56,43 @@ def cmd_tickets(args):
     state_filter = args.state or "open"
     limit = args.limit or 25
     
+    # State IDs: 1=new, 2=open, 3=pending reminder, 4=closed, 7=pending close
+    state_id_map = {"new": 1, "open": 2, "pending": 3, "closed": 4, "pending_close": 7}
+    state_name_map = {1: "new", 2: "open", 3: "pending reminder", 4: "closed", 7: "pending close"}
+    
     if state_filter == "all":
-        endpoint = f"tickets?per_page={limit}&sort_by=updated_at&order_by=desc"
+        # Get all non-closed tickets
+        all_tickets = []
+        for sid in [1, 2, 3, 7]:
+            data = api("GET", f"tickets/search?query=state_id:{sid}&per_page={limit}")
+            if isinstance(data, list):
+                all_tickets.extend(data)
+        tickets = all_tickets[:limit]
     else:
-        # Search by state
-        endpoint = f"tickets/search?query=state.name:{state_filter}&per_page={limit}&sort_by=updated_at&order_by=desc"
-    
-    result = api("GET", endpoint)
-    tickets = result if isinstance(result, list) else result.get("tickets", result.get("assets", {}).get("Ticket", {}))
-    
-    if isinstance(tickets, dict):
-        tickets = list(tickets.values())
+        sid = state_id_map.get(state_filter, 2)
+        data = api("GET", f"tickets/search?query=state_id:{sid}&per_page={limit}")
+        tickets = data if isinstance(data, list) else []
     
     output = []
     for t in tickets[:limit]:
         if isinstance(t, dict):
+            sid = t.get("state_id", 0)
             output.append({
                 "id": t.get("id"),
                 "number": t.get("number"),
                 "title": t.get("title"),
-                "state": t.get("state"),
-                "priority": t.get("priority"),
+                "state": state_name_map.get(sid, f"state_{sid}"),
+                "owner_id": t.get("owner_id"),
                 "customer_id": t.get("customer_id"),
+                "group_id": t.get("group_id"),
+                "created_at": t.get("created_at"),
                 "updated_at": t.get("updated_at"),
             })
-    print(json.dumps(output, indent=2))
+    
+    if not output:
+        print(json.dumps({"status": "NO RESULTS FOUND", "message": f"No {state_filter} tickets found."}))
+    else:
+        print(json.dumps({"status": "OK", "state": state_filter, "count": len(output), "tickets": output}, indent=2))
 
 def resolve_ticket_id(raw_id):
     """Resolve a ticket number or internal ID to the internal ID."""
