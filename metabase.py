@@ -45,6 +45,21 @@ def api(method, endpoint, data=None):
         print(f"API Error {e.code}: {err}", file=sys.stderr)
         return None
 
+def sql_escape(value):
+    """Escape a string for safe inclusion in SQL. Prevents SQL injection."""
+    if value is None:
+        return ""
+    s = str(value)
+    # Escape backslashes first, then single quotes
+    s = s.replace("\\", "\\\\")
+    s = s.replace("'", "\\'")
+    s = s.replace('"', '\\"')
+    s = s.replace("\x00", "")
+    s = s.replace("\n", "\\n")
+    s = s.replace("\r", "\\r")
+    s = s.replace("\x1a", "\\Z")
+    return s
+
 def run_sql(query):
     """Run a native SQL query against the billing database."""
     result = api("POST", "dataset", {
@@ -66,7 +81,7 @@ def format_money(cents):
 
 def cmd_client(args):
     """Full client financial overview."""
-    name = args.name
+    name = sql_escape(args.name)
     cols, rows = run_sql(f"""
         SELECT 
             c.id, c.company_name, c.name, c.email, c.mobile, c.telephone,
@@ -82,13 +97,13 @@ def cmd_client(args):
     """)
     
     if not rows:
-        print(json.dumps({"error": f"No client found matching '{name}'"}))
+        print(json.dumps({"status": "NO RESULTS FOUND", "query": name, "message": f"⚠️ NO RESULTS FOUND: No client in the billing system matches '{name}'. The name may be misspelled."}))
         return
     
     clients = []
     for row in rows:
         client = dict(zip(cols, row))
-        cid = client.get("id")
+        cid = int(client.get("id"))
         
         # Get recent invoices
         inv_cols, inv_rows = run_sql(f"""
@@ -143,12 +158,12 @@ def cmd_client(args):
             "recent_payments": payments,
         })
     
-    print(json.dumps({"clients": clients, "count": len(clients)}, indent=2, default=str))
+    print(json.dumps({"status": "OK", "clients": clients, "count": len(clients)}, indent=2, default=str))
 
 def cmd_invoices(args):
     """Invoice history for a client."""
-    name = args.name
-    months = args.months or 6
+    name = sql_escape(args.name)
+    months = int(args.months or 6)
     cols, rows = run_sql(f"""
         SELECT i.number, i.date, i.due_date, i.total/100.0 as total_rands, 
                i.outstanding/100.0 as outstanding_rands, i.total_paid/100.0 as paid_rands,
@@ -162,11 +177,14 @@ def cmd_invoices(args):
         LIMIT 50
     """)
     results = [dict(zip(cols, r)) for r in rows]
-    print(json.dumps({"invoices": results, "count": len(results), "months": months}, indent=2, default=str))
+    if not results:
+        print(json.dumps({"status": "NO RESULTS FOUND", "query": args.name, "message": f"⚠️ NO RESULTS FOUND: No invoices found for '{args.name}'. The name may be misspelled."}))
+        return
+    print(json.dumps({"status": "OK", "invoices": results, "count": len(results), "months": months}, indent=2, default=str))
 
 def cmd_outstanding(args):
     """All clients with outstanding balances."""
-    min_amount = (args.min or 0) * 100  # Convert Rands to cents
+    min_amount = int((args.min or 0) * 100)  # Convert Rands to cents
     cols, rows = run_sql(f"""
         SELECT c.company_name, c.name, c.billing_account_number, c.mobile, c.email,
                SUM(i.outstanding)/100.0 as total_outstanding_rands,
@@ -185,7 +203,7 @@ def cmd_outstanding(args):
 
 def cmd_revenue(args):
     """Revenue summary by month."""
-    months = args.months or 12
+    months = int(args.months or 12)
     cols, rows = run_sql(f"""
         SELECT DATE_FORMAT(i.date, '%Y-%m') as month,
                SUM(i.total)/100.0 as revenue_rands,
@@ -202,7 +220,7 @@ def cmd_revenue(args):
 
 def cmd_annuity(args):
     """Recurring billing (MRC) for a client."""
-    name = args.name
+    name = sql_escape(args.name)
     cols, rows = run_sql(f"""
         SELECT c.company_name, c.name as contact_name, c.billing_account_number,
                a.reference, a.frequency, a.billing_date, a.description as annuity_desc,
@@ -217,12 +235,15 @@ def cmd_annuity(args):
         ORDER BY ai.price DESC
     """)
     results = [dict(zip(cols, r)) for r in rows]
+    if not results:
+        print(json.dumps({"status": "NO RESULTS FOUND", "query": args.name, "message": f"⚠️ NO RESULTS FOUND: No annuity/MRC records found for '{args.name}'. The name may be misspelled."}))
+        return
     mrc_total = sum(r.get("line_total_rands", 0) or 0 for r in results)
-    print(json.dumps({"items": results, "count": len(results), "mrc_total_rands": mrc_total}, indent=2, default=str))
+    print(json.dumps({"status": "OK", "items": results, "count": len(results), "mrc_total_rands": mrc_total}, indent=2, default=str))
 
 def cmd_search(args):
     """Search clients by name, company, or account number."""
-    query = args.query
+    query = sql_escape(args.query)
     cols, rows = run_sql(f"""
         SELECT c.id, c.company_name, c.name, c.email, c.mobile, 
                c.billing_account_number, c.stop_supply, c.payment_method
@@ -234,7 +255,10 @@ def cmd_search(args):
         LIMIT 20
     """)
     results = [dict(zip(cols, r)) for r in rows]
-    print(json.dumps({"clients": results, "count": len(results)}, indent=2, default=str))
+    if not results:
+        print(json.dumps({"status": "NO RESULTS FOUND", "query": args.query, "message": f"⚠️ NO RESULTS FOUND: No clients match '{args.query}'. Check spelling or try a different search term."}))
+        return
+    print(json.dumps({"status": "OK", "clients": results, "count": len(results)}, indent=2, default=str))
 
 def cmd_sql(args):
     """Run a raw SQL query (read-only)."""
