@@ -301,6 +301,42 @@ def cmd_aging(args):
     }
     print(json.dumps(output, indent=2))
 
+def cmd_today(args):
+    """Tickets created today (or on a specific date). Shows count + summary."""
+    from datetime import datetime, timedelta
+    target_date = args.date if args.date else datetime.now().strftime("%Y-%m-%d")
+    # Zammad search supports created_at range
+    query = f"created_at:[{target_date}T00:00:00Z TO {target_date}T23:59:59Z]"
+    data = api("GET", f"tickets/search?query={quote(query)}&per_page=200")
+    tickets = data if isinstance(data, list) else []
+    # Summarise by state and group
+    from collections import Counter
+    state_map = {1: "new", 2: "open", 3: "pending reminder", 4: "closed", 7: "pending close"}
+    by_state = Counter()
+    by_group = Counter()
+    summaries = []
+    for t in tickets:
+        sid = t.get("state_id", 0)
+        by_state[state_map.get(sid, f"state_{sid}")] += 1
+        by_group[t.get("group_id", "unknown")] += 1
+        summaries.append({
+            "number": t.get("number"),
+            "title": t.get("title", ""),
+            "state": state_map.get(sid, f"state_{sid}"),
+            "customer_id": t.get("customer_id"),
+            "created_at": t.get("created_at"),
+        })
+    result = {
+        "date": target_date,
+        "total": len(tickets),
+        "by_state": dict(by_state),
+        "by_group": dict(by_group),
+        "tickets": summaries,
+    }
+    if not tickets:
+        result["message"] = f"⚠️ NO TICKETS FOUND: No tickets were created on {target_date}."
+    print(json.dumps(result, indent=2, default=str))
+
 def cmd_create(args):
     data = {
         "title": args.title,
@@ -360,6 +396,8 @@ def main():
     sub.add_parser("groups")
     sub.add_parser("stats")
     sub.add_parser("agents")
+    p = sub.add_parser("today")
+    p.add_argument("--date", default=None, help="Date in YYYY-MM-DD format (default: today)")
     p = sub.add_parser("aging")
     p.add_argument("--top", type=int, default=10, help="Number of oldest/stalest to show")
     
@@ -387,7 +425,7 @@ def main():
     cmd_map = {
         "me": cmd_me, "tickets": cmd_tickets, "ticket": cmd_ticket,
         "search": cmd_search, "customer": cmd_customer, "groups": cmd_groups,
-        "stats": cmd_stats, "agents": cmd_agents, "aging": cmd_aging,
+        "stats": cmd_stats, "agents": cmd_agents, "aging": cmd_aging, "today": cmd_today,
         "create": cmd_create, "note": cmd_note, "update": cmd_update,
     }
     cmd_map[args.cmd](args)

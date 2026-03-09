@@ -476,6 +476,7 @@ const SHERPA_TOOLS = [
   { type: 'function', function: { name: 'zammad_stats', description: 'Get ticket queue statistics — counts by state (new, open, pending, etc.)', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'zammad_agents', description: 'List all support agents with their ticket counts broken down by state. Shows workload distribution.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'zammad_aging', description: 'Ticket age report: age distribution buckets, oldest tickets, stalest (least recently updated) tickets, average age by state.', parameters: { type: 'object', properties: { top: { type: 'string', description: 'Number of oldest/stalest to show (default 10)' } } } } },
+  { type: 'function', function: { name: 'zammad_today', description: 'Get tickets created today (or a specific date). Shows total count, breakdown by state, and a list of tickets with titles. Use when asked "how many tickets today" or about daily intake.', parameters: { type: 'object', properties: { date: { type: 'string', description: 'Date in YYYY-MM-DD format (default: today)' } } } } },
   { type: 'function', function: { name: 'xwiki_search', description: 'Search the MoreNET documentation wiki for procedures, guides, and knowledge base articles.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'xwiki_get', description: 'Get full content of a specific wiki page by its ID.', parameters: { type: 'object', properties: { id: { type: 'string', description: 'Page ID' } }, required: ['id'] } } },
   { type: 'function', function: { name: 'billing_client', description: 'Get client financial overview from billing system: account details, invoices, outstanding balance, payment history. Search by name, company, or account number.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'Client name, company name, or account number' } }, required: ['name'] } } },
@@ -492,6 +493,11 @@ const TOOL_COMMANDS = {
   zammad_stats: () => ['python3', path.join(__dirname, 'zammad.py'), 'stats'],
   zammad_agents: () => ['python3', path.join(__dirname, 'zammad.py'), 'agents'],
   zammad_aging: (args) => ['python3', path.join(__dirname, 'zammad.py'), 'aging', '--top', String(args.top || '10')],
+  zammad_today: (args) => {
+    const cmd = ['python3', path.join(__dirname, 'zammad.py'), 'today'];
+    if (args.date) cmd.push('--date', String(args.date));
+    return cmd;
+  },
   xwiki_search: (args) => ['python3', path.join(__dirname, 'xwiki.py'), 'search', args.query || ''],
   xwiki_get: (args) => ['python3', path.join(__dirname, 'xwiki.py'), 'get', String(args.id || '')],
   billing_client: (args) => ['python3', path.join(__dirname, 'metabase.py'), 'client', args.name || ''],
