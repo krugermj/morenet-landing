@@ -701,6 +701,86 @@ app.get('/api/me', apiAuthMiddleware, (req, res) => {
 
 app.use(authMiddleware, express.static(path.join(__dirname, 'public')));
 
+// ── Internal DB API (locked to NEX gateway) ─────────────
+const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN || '';
+const INTERNAL_API_ALLOWED_IPS = (process.env.INTERNAL_API_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean);
+
+// Rate limiter: 30 requests per minute per IP
+const internalApiLimiter = new Map();
+function internalRateLimit(ip) {
+  const now = Date.now();
+  const window = 60 * 1000;
+  const maxReqs = 30;
+  let record = internalApiLimiter.get(ip);
+  if (!record || now - record.start > window) {
+    record = { start: now, count: 0 };
+    internalApiLimiter.set(ip, record);
+  }
+  record.count++;
+  return record.count <= maxReqs;
+}
+
+function internalApiAuth(req, res, next) {
+  // IP whitelist
+  const clientIp = req.ip?.replace('::ffff:', '') || '';
+  if (INTERNAL_API_ALLOWED_IPS.length > 0 && !INTERNAL_API_ALLOWED_IPS.includes(clientIp)) {
+    console.warn(`Internal API: blocked IP ${clientIp}`);
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  // Token check
+  const token = req.headers['x-internal-token'] || req.query.token;
+  if (!INTERNAL_API_TOKEN || token !== INTERNAL_API_TOKEN) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+  // Rate limit
+  if (!internalRateLimit(clientIp)) {
+    return res.status(429).json({ error: 'Rate limit exceeded (30/min)' });
+  }
+  next();
+}
+
+// Read-only DB query endpoint
+app.post('/api/internal/query', internalApiAuth, async (req, res) => {
+  const { sql, params } = req.body;
+  if (!sql || typeof sql !== 'string') return res.status(400).json({ error: 'SQL required' });
+  // Block any write operations
+  const normalized = sql.trim().toUpperCase();
+  const forbidden = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'GRANT', 'REVOKE', 'COPY'];
+  if (forbidden.some(kw => normalized.startsWith(kw))) {
+    return res.status(403).json({ error: 'Read-only: write operations blocked' });
+  }
+  try {
+    const result = await db.pool.query(sql, params || []);
+    res.json({
+      rows: result.rows.slice(0, 500),
+      rowCount: result.rowCount,
+      fields: result.fields?.map(f => f.name) || [],
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Quick stats endpoint
+app.get('/api/internal/stats', internalApiAuth, async (req, res) => {
+  try {
+    const users = await db.pool.query('SELECT COUNT(*) as count FROM users');
+    const messages = await db.pool.query('SELECT COUNT(*) as count FROM chat_messages');
+    const escalations = await db.pool.query('SELECT COUNT(*) as count FROM escalations');
+    const recentChats = await db.pool.query(`
+      SELECT user_email, chat_date, COUNT(*) as msgs
+      FROM chat_messages GROUP BY user_email, chat_date
+      ORDER BY MAX(created_at) DESC LIMIT 10
+    `);
+    res.json({
+      users: parseInt(users.rows[0].count),
+      chat_messages: parseInt(messages.rows[0].count),
+      escalations: parseInt(escalations.rows[0].count),
+      recent_chats: recentChats.rows,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Start ────────────────────────────────────────────────
 async function start() {
   try {
