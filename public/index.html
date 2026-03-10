@@ -32,7 +32,13 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
+        .top-left { display: flex; align-items: center; gap: 0.75rem; }
         .top-logo { height: 40px; width: auto; }
+        .hamburger {
+            display: none;
+            background: none; border: none; color: #8892b0;
+            font-size: 1.4rem; cursor: pointer; padding: 0.25rem 0.5rem;
+        }
 
         .top-bar-right {
             display: flex;
@@ -56,7 +62,6 @@
             color: #8892b0;
             font-size: 0.85rem;
         }
-
         .user-greeting span { color: #00d2ff; font-weight: 600; }
 
         .top-avatar {
@@ -67,16 +72,114 @@
             border: 2px solid rgba(0, 210, 255, 0.4);
         }
 
+        /* Layout: Sidebar + Main */
+        .app-layout {
+            display: flex;
+            flex: 1;
+            margin-top: 57px; /* top bar height */
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: rgba(10, 10, 26, 0.95);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            height: calc(100vh - 57px);
+            position: sticky;
+            top: 57px;
+        }
+
+        .sidebar-header {
+            padding: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .new-conv-btn {
+            width: 100%;
+            background: rgba(0, 210, 255, 0.1);
+            border: 1px solid rgba(0, 210, 255, 0.25);
+            color: #00d2ff;
+            padding: 0.55rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .new-conv-btn:hover { background: rgba(0, 210, 255, 0.18); }
+
+        .conv-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem 0;
+        }
+
+        .conv-item {
+            display: flex;
+            align-items: center;
+            padding: 0.6rem 0.75rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            border-left: 3px solid transparent;
+            position: relative;
+        }
+        .conv-item:hover { background: rgba(0, 210, 255, 0.06); }
+        .conv-item.active {
+            background: rgba(0, 210, 255, 0.1);
+            border-left-color: #00d2ff;
+        }
+
+        .conv-info { flex: 1; min-width: 0; }
+        .conv-title {
+            font-size: 0.83rem;
+            color: #c8d6e5;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .conv-item.active .conv-title { color: #fff; }
+        .conv-date {
+            font-size: 0.7rem;
+            color: #5a6380;
+            margin-top: 0.15rem;
+        }
+
+        .conv-delete {
+            display: none;
+            background: none; border: none;
+            color: #5a6380; cursor: pointer;
+            font-size: 0.9rem; padding: 0.2rem 0.4rem;
+            border-radius: 4px; transition: all 0.15s;
+            flex-shrink: 0;
+        }
+        .conv-delete:hover { color: #ff6b6b; background: rgba(255,59,48,0.1); }
+        .conv-item:hover .conv-delete { display: block; }
+
+        .conv-empty {
+            padding: 1.5rem;
+            text-align: center;
+            color: #5a6380;
+            font-size: 0.82rem;
+        }
+
         /* Main Content */
         .main {
             flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 5rem 1rem 2rem;
+            padding: 2rem 1rem;
             background: linear-gradient(135deg, #0f0f23 0%, #16213e 50%, #0f3460 100%);
             position: relative;
             overflow: hidden;
+            min-height: calc(100vh - 57px);
         }
 
         .main::before {
@@ -202,31 +305,6 @@
             min-height: 0;
         }
 
-        .chat-header {
-            display: flex;
-            justify-content: flex-end;
-            padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .new-chat-btn {
-            background: transparent;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #8892b0;
-            font-size: 0.78rem;
-            padding: 0.3rem 0.7rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: inherit;
-            transition: all 0.2s;
-        }
-
-        .new-chat-btn:hover {
-            color: #00d2ff;
-            border-color: rgba(0, 210, 255, 0.3);
-            background: rgba(0, 210, 255, 0.06);
-        }
-
         .chat-messages {
             padding: 1.25rem;
             flex: 1;
@@ -235,7 +313,7 @@
             flex-direction: column;
             gap: 1rem;
             min-height: 250px;
-            max-height: 55vh;
+            max-height: 65vh;
         }
 
         .message {
@@ -244,6 +322,8 @@
             align-items: flex-start;
             animation: fadeIn 0.35s ease;
         }
+
+        .message.no-anim { animation: none; }
 
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(6px); }
@@ -493,14 +573,31 @@
             font-size: 0.78rem;
         }
 
+        /* Mobile overlay for sidebar */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 57px; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 49;
+        }
+        .sidebar-overlay.active { display: block; }
+
         /* Mobile */
-        @media (max-width: 640px) {
-            .top-bar { padding: 0.6rem 1rem; }
-            .top-logo { height: 32px; }
-            .main { padding: 4.5rem 0.75rem 1rem; }
+        @media (max-width: 768px) {
+            .hamburger { display: block; }
+            .sidebar {
+                position: fixed;
+                top: 57px; left: 0; bottom: 0;
+                z-index: 50;
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .main { padding: 1.5rem 0.75rem; }
             .nex-heading { font-size: 1.6rem; }
             .nex-avatar { width: 70px; height: 70px; }
-            .chat-messages { padding: 1rem; max-height: 50vh; }
+            .chat-messages { padding: 1rem; max-height: 55vh; }
             .message-bubble { max-width: 92%; font-size: 0.88rem; }
             .quick-btn { font-size: 0.78rem; padding: 0.4rem 0.8rem; }
             .user-greeting { display: none; }
@@ -509,7 +606,10 @@
 </head>
 <body>
     <header class="top-bar">
-        <img src="logo.png" alt="MoreNET" class="top-logo">
+        <div class="top-left">
+            <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+            <img src="logo.png" alt="MoreNET" class="top-logo">
+        </div>
         <div class="top-bar-right">
             <span class="user-greeting" id="userGreeting"></span>
             <a href="/admin" id="adminLink" style="display:none" class="top-bar-link">Admin</a>
@@ -518,50 +618,62 @@
         </div>
     </header>
 
-    <main class="main">
-        <div class="nex-intro" id="nexIntro">
-            <img src="nex.png" alt="NEX" class="nex-avatar">
-            <h1 class="nex-heading">Welcome to <span>NEX</span></h1>
-            <p class="nex-subtitle">Your friendly NEXt level Client Insights Specialist</p>
-        </div>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-        <div class="quick-start" id="quickStart">
-            <button class="quick-btn" onclick="sendQuick('Show me all open tickets')"><span class="icon">🎫</span> Open tickets</button>
-            <button class="quick-btn" onclick="sendQuick('Show queue statistics')"><span class="icon">📊</span> Queue stats</button>
-            <button class="quick-btn" onclick="sendQuick('Search for a customer')"><span class="icon">👤</span> Find customer</button>
-            <button class="quick-btn" onclick="sendQuick('Search documentation')"><span class="icon">📖</span> Search docs</button>
-        </div>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <button class="new-conv-btn" onclick="newConversation()">✦ New conversation</button>
+            </div>
+            <div class="conv-list" id="convList">
+                <div class="conv-empty">Loading...</div>
+            </div>
+        </aside>
 
-        <div class="chat-container">
-            <div class="chat-box">
-                <div class="chat-header">
-                    <button class="new-chat-btn" onclick="newConversation()">✦ New conversation</button>
+        <div class="main-wrapper" style="flex:1;display:flex;flex-direction:column;">
+            <main class="main">
+                <div class="nex-intro" id="nexIntro">
+                    <img src="nex.png" alt="NEX" class="nex-avatar">
+                    <h1 class="nex-heading">Welcome to <span>NEX</span></h1>
+                    <p class="nex-subtitle">Your friendly NEXt level Client Insights Specialist</p>
                 </div>
-                <div class="chat-messages" id="chatMessages">
-                    <div class="message">
-                        <img src="nex.png" alt="NEX" class="message-avatar">
-                        <div class="message-bubble">
-                            <span class="sender">NEX</span>
-                            Hey! I'm NEX, your MoreNET client insights specialist. Ask me anything about tickets, customers, or documentation. ⚡
+
+                <div class="quick-start" id="quickStart">
+                    <button class="quick-btn" onclick="sendQuick('Show me all open tickets')"><span class="icon">🎫</span> Open tickets</button>
+                    <button class="quick-btn" onclick="sendQuick('Show queue statistics')"><span class="icon">📊</span> Queue stats</button>
+                    <button class="quick-btn" onclick="sendQuick('Search for a customer')"><span class="icon">👤</span> Find customer</button>
+                    <button class="quick-btn" onclick="sendQuick('Search documentation')"><span class="icon">📖</span> Search docs</button>
+                </div>
+
+                <div class="chat-container">
+                    <div class="chat-box">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="message">
+                                <img src="nex.png" alt="NEX" class="message-avatar">
+                                <div class="message-bubble">
+                                    <span class="sender">NEX</span>
+                                    Hey! I'm NEX, your MoreNET client insights specialist. Ask me anything about tickets, customers, or documentation. ⚡
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chat-input-area">
+                            <textarea class="chat-input" id="chatInput" placeholder="Ask NEX something..." rows="1"></textarea>
+                            <button class="chat-send" id="chatSend" title="Send">➤</button>
                         </div>
                     </div>
                 </div>
-                <div class="chat-input-area">
-                    <textarea class="chat-input" id="chatInput" placeholder="Ask NEX something..." rows="1"></textarea>
-                    <button class="chat-send" id="chatSend" title="Send">➤</button>
+
+                <div class="status-badge" id="statusBadge">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Checking...</span>
                 </div>
-            </div>
-        </div>
+            </main>
 
-        <div class="status-badge" id="statusBadge">
-            <span class="status-dot"></span>
-            <span id="statusText">Checking...</span>
+            <footer>
+                <p>&copy; 2026 MoreNET Internet Solutions. Powered by <span style="color: #00d2ff;">NEX</span> ⚡</p>
+            </footer>
         </div>
-    </main>
-
-    <footer>
-        <p>&copy; 2026 MoreNET Internet Solutions. Powered by <span style="color: #00d2ff;">NEX</span> ⚡</p>
-    </footer>
+    </div>
 
     <script>
         const input = document.getElementById('chatInput');
@@ -569,10 +681,13 @@
         const messagesEl = document.getElementById('chatMessages');
         const quickStart = document.getElementById('quickStart');
         const nexIntro = document.getElementById('nexIntro');
+        const convListEl = document.getElementById('convList');
         let userName = 'You';
         let sending = false;
         let userScrolledUp = false;
         let messageCount = 0;
+        let currentConversationId = null;
+        let conversations = [];
 
         // Track scroll position
         messagesEl.addEventListener('scroll', () => {
@@ -585,6 +700,12 @@
             input.style.height = 'auto';
             input.style.height = Math.min(input.scrollHeight, 120) + 'px';
         });
+
+        // Sidebar toggle (mobile)
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('sidebarOverlay').classList.toggle('active');
+        }
 
         // Fetch user info
         fetch('/api/me').then(r => r.json()).then(u => {
@@ -622,11 +743,107 @@
             }
         }
 
-        function addMessage(html, sender) {
+        function relativeTime(isoStr) {
+            if (!isoStr) return '';
+            const diff = Date.now() - new Date(isoStr).getTime();
+            const mins = Math.floor(diff / 60000);
+            if (mins < 1) return 'Just now';
+            if (mins < 60) return mins + 'm ago';
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 24) return hrs + 'h ago';
+            const days = Math.floor(hrs / 24);
+            if (days < 7) return days + 'd ago';
+            return new Date(isoStr).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+        }
+
+        // ── Conversation List ───────────────────────────
+        async function loadConversations() {
+            try {
+                const res = await fetch('/api/chat/conversations');
+                conversations = await res.json();
+                renderConversationList();
+            } catch (err) {
+                convListEl.innerHTML = '<div class="conv-empty">Failed to load</div>';
+            }
+        }
+
+        function renderConversationList() {
+            if (!conversations.length) {
+                convListEl.innerHTML = '<div class="conv-empty">No conversations yet.<br>Start one below!</div>';
+                return;
+            }
+            convListEl.innerHTML = conversations.map(c => `
+                <div class="conv-item ${c.id === currentConversationId ? 'active' : ''}"
+                     onclick="loadConversation('${c.id}')" data-id="${c.id}">
+                    <div class="conv-info">
+                        <div class="conv-title">${escapeHtml(c.title || 'New conversation')}</div>
+                        <div class="conv-date">${relativeTime(c.updatedAt)} · ${c.messageCount} msgs</div>
+                    </div>
+                    <button class="conv-delete" onclick="event.stopPropagation();deleteConversation('${c.id}')" title="Delete">✕</button>
+                </div>
+            `).join('');
+        }
+
+        async function loadConversation(convId) {
+            currentConversationId = convId;
+            renderConversationList();
+
+            // Close sidebar on mobile
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebarOverlay').classList.remove('active');
+
+            // Show compact intro
+            nexIntro.classList.add('compact');
+            quickStart.classList.add('hidden');
+
+            // Clear messages
+            messagesEl.innerHTML = '';
+            messageCount = 0;
+
+            try {
+                const res = await fetch(`/api/chat/history/${convId}`);
+                const data = await res.json();
+
+                if (data.messages && data.messages.length > 0) {
+                    for (const msg of data.messages) {
+                        if (msg.role === 'tool') continue; // Skip tool messages
+                        if (msg.role === 'error') continue;
+                        const sender = msg.role === 'user' ? (msg.userName || userName) : 'NEX';
+                        const html = msg.role === 'user' ? escapeHtml(msg.content || '') : formatMarkdown(msg.content || '');
+                        addMessage(html, sender, true); // true = no animation
+                    }
+                } else {
+                    addWelcomeMessage();
+                }
+            } catch (err) {
+                addMessage('Failed to load conversation history.', 'NEX');
+            }
+
+            // Force scroll to bottom after loading
+            userScrolledUp = false;
+            scrollToBottom();
+            input.focus();
+        }
+
+        async function deleteConversation(convId) {
+            if (!confirm('Delete this conversation?')) return;
+            try {
+                await fetch(`/api/chat/conversations/${convId}`, { method: 'DELETE' });
+                if (currentConversationId === convId) {
+                    currentConversationId = null;
+                    resetToWelcome();
+                }
+                await loadConversations();
+            } catch (err) {
+                console.error('Delete failed:', err);
+            }
+        }
+
+        function addMessage(html, sender, noAnimation) {
             messageCount++;
             const isNex = sender === 'NEX';
             const div = document.createElement('div');
-            div.className = 'message';
+            div.className = 'message' + (noAnimation ? ' no-anim' : '');
             div.innerHTML = `
                 ${isNex ? '<img src="nex.png" alt="NEX" class="message-avatar">' : ''}
                 <div class="message-bubble ${isNex ? '' : 'user-bubble'}">
@@ -637,11 +854,34 @@
             messagesEl.appendChild(div);
             scrollToBottom();
 
-            // Compact the intro after first user message
+            // Compact the intro after messages
             if (messageCount > 1) {
                 nexIntro.classList.add('compact');
                 quickStart.classList.add('hidden');
             }
+        }
+
+        function addWelcomeMessage() {
+            const div = document.createElement('div');
+            div.className = 'message no-anim';
+            div.innerHTML = `
+                <img src="nex.png" alt="NEX" class="message-avatar">
+                <div class="message-bubble">
+                    <span class="sender">NEX</span>
+                    Hey! I'm NEX, your MoreNET client insights specialist. Ask me anything about tickets, customers, or documentation. ⚡
+                </div>
+            `;
+            messagesEl.appendChild(div);
+        }
+
+        function resetToWelcome() {
+            messagesEl.innerHTML = '';
+            messageCount = 0;
+            currentConversationId = null;
+            nexIntro.classList.remove('compact');
+            quickStart.classList.remove('hidden');
+            addWelcomeMessage();
+            renderConversationList();
         }
 
         function showTyping() {
@@ -678,10 +918,13 @@
             showTyping();
 
             try {
+                const body = { message: text };
+                if (currentConversationId) body.conversationId = currentConversationId;
+
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text }),
+                    body: JSON.stringify(body),
                 });
                 removeTyping();
                 if (!res.ok) {
@@ -689,6 +932,12 @@
                     addMessage(escapeHtml(err.error || 'Something went wrong. Please try again.'), 'NEX');
                 } else {
                     const data = await res.json();
+                    // Track conversation ID from server
+                    if (data.conversationId && data.conversationId !== currentConversationId) {
+                        currentConversationId = data.conversationId;
+                        // Refresh sidebar to show new conversation
+                        await loadConversations();
+                    }
                     addMessage(formatMarkdown(data.reply || 'No response.'), 'NEX');
                 }
             } catch (err) {
@@ -707,36 +956,15 @@
         }
 
         function newConversation() {
-            // Clear chat UI
-            messagesEl.innerHTML = '';
-            messageCount = 0;
-            nexIntro.classList.remove('compact');
-            quickStart.classList.remove('hidden');
-
-            // Reset server-side history
-            fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: '/reset' }),
-            }).catch(() => {});
-
-            // Re-add welcome message
-            const div = document.createElement('div');
-            div.className = 'message';
-            div.innerHTML = `
-                <img src="nex.png" alt="NEX" class="message-avatar">
-                <div class="message-bubble">
-                    <span class="sender">NEX</span>
-                    Hey! I'm NEX, your MoreNET client insights specialist. Ask me anything about tickets, customers, or documentation. ⚡
-                </div>
-            `;
-            messagesEl.appendChild(div);
+            resetToWelcome();
+            // Close sidebar on mobile
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebarOverlay').classList.remove('active');
             input.focus();
         }
 
         // ── Markdown Formatter ──────────────────────────────
         function formatMarkdown(text) {
-            // Escape HTML first to prevent XSS, then apply markdown
             let html = escapeHtml(text);
 
             // Code blocks (``` ... ```)
@@ -752,7 +980,6 @@
                 const rows = tableBlock.trim().split('\n').filter(r => r.trim());
                 if (rows.length < 2) return tableBlock;
 
-                // Check for separator row
                 const sepIdx = rows.findIndex(r => /^\|[\s\-:|]+\|$/.test(r.trim()));
                 let headerRow = null;
                 let dataRows = rows;
@@ -761,7 +988,6 @@
                     headerRow = rows[0];
                     dataRows = rows.slice(2);
                 } else if (sepIdx === -1) {
-                    // No separator — treat first row as header anyway
                     headerRow = rows[0];
                     dataRows = rows.slice(1);
                 }
@@ -785,7 +1011,7 @@
                 return tableHtml;
             });
 
-            // Headers (### and ####)
+            // Headers
             html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
             html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
 
@@ -804,7 +1030,7 @@
             // Bare URLs
             html = html.replace(/(?<!["=])(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
 
-            // Ordered lists (1. item)
+            // Ordered lists
             html = html.replace(/((?:^\d+\. .+$\n?)+)/gm, (block) => {
                 const items = block.trim().split('\n').map(line => {
                     return '<li>' + line.replace(/^\d+\.\s+/, '') + '</li>';
@@ -812,7 +1038,7 @@
                 return '<ol>' + items.join('') + '</ol>';
             });
 
-            // Unordered lists (- item or * item)
+            // Unordered lists
             html = html.replace(/((?:^[-*] .+$\n?)+)/gm, (block) => {
                 const items = block.trim().split('\n').map(line => {
                     return '<li>' + line.replace(/^[-*]\s+/, '') + '</li>';
@@ -823,10 +1049,10 @@
             // Blockquotes
             html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
-            // Line breaks (but not inside block elements)
+            // Line breaks
             html = html.replace(/\n/g, '<br>');
 
-            // Clean up extra breaks after block elements
+            // Clean up extra breaks
             html = html.replace(/<\/(table|pre|ol|ul|blockquote|h[34]|hr)><br>/g, '</$1>');
             html = html.replace(/<br><(table|pre|ol|ul|blockquote|h[34]|hr)/g, '<$1');
 
@@ -846,6 +1072,15 @@
             await fetch('/api/logout', { method: 'POST' });
             window.location.href = '/login';
         }
+
+        // ── Init ────────────────────────────────────────────
+        (async function init() {
+            await loadConversations();
+            // Auto-load most recent conversation if exists
+            if (conversations.length > 0) {
+                await loadConversation(conversations[0].id);
+            }
+        })();
     </script>
 </body>
 </html>

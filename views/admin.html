@@ -258,6 +258,7 @@
         </div>
     </div>
 
+
     <script>
         let currentUser = null;
         let allUsers = [];
@@ -296,7 +297,6 @@
             window.location.href = '/login';
         }
 
-        // ── Load ─────────────────────────────────────────
         async function loadAuthInfo() {
             const info = await api('GET', '/api/auth-info');
             document.getElementById('authMode').textContent =
@@ -331,7 +331,6 @@
             `).join('');
         }
 
-        // ── Edit Modal ───────────────────────────────────
         function openEditModal(id) {
             const u = allUsers.find(u => u.id === id);
             if (!u) return;
@@ -375,7 +374,6 @@
             } catch (err) { alert(err.message); }
         });
 
-        // ── Delete ───────────────────────────────────────
         async function deleteUser(id, email) {
             if (!confirm(`Delete user ${email}? They can log in again via Authentik (will be re-created as default role).`)) return;
             try {
@@ -385,7 +383,6 @@
             } catch (err) { showMsg('tableError', err.message); }
         }
 
-        // ── Tabs ─────────────────────────────────────────
         function showTab(tab) {
             ['users', 'chats', 'escalations'].forEach(t => {
                 document.getElementById('section' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? 'block' : 'none';
@@ -402,8 +399,8 @@
             if (tab === 'escalations') loadEscalations();
         }
 
-        // ── Chat History ─────────────────────────────────
-        let currentChatFile = null;
+        // ── Chat History (conversation-based) ────────────
+        let currentConvId = null;
         let currentChatReviewed = false;
 
         async function loadChats() {
@@ -417,22 +414,23 @@
                     el.innerHTML = '<p style="color:#5a6380;">' + (showReviewed ? 'No chats found.' : 'No unreviewed chats. ✓') + '</p>';
                     return;
                 }
-                el.innerHTML = '<table class="user-table"><thead><tr><th>User</th><th>Date</th><th>Messages</th><th>Last Activity</th><th>Status</th><th></th></tr></thead><tbody>' +
+                el.innerHTML = '<table class="user-table"><thead><tr><th>User</th><th>Title</th><th>Messages</th><th>Last Activity</th><th>Reviewed By</th><th>Status</th><th></th></tr></thead><tbody>' +
                     chats.map(c => `<tr>
                         <td>${esc(c.userId || '?')}</td>
-                        <td>${esc(c.date || '?')}</td>
+                        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(c.title || 'Untitled')}</td>
                         <td>${c.messageCount || 0}</td>
                         <td><span class="last-login">${c.lastMessage ? formatDate(c.lastMessage) : '—'}</span></td>
+                        <td>${c.reviewerName ? esc(c.reviewerName) : '—'}</td>
                         <td>${c.reviewed ? '<span class="badge badge-authentik">reviewed</span>' : '<span class="badge badge-local">pending</span>'}</td>
-                        <td><button class="btn btn-ghost btn-sm" onclick="viewChat('${esc(c.file.replace('.json',''))}')">View</button></td>
+                        <td><button class="btn btn-ghost btn-sm" onclick="viewChat('${esc(c.conversationId)}')">View</button></td>
                     </tr>`).join('') + '</tbody></table>';
             } catch (err) { console.error(err); }
         }
 
-        async function viewChat(filename) {
+        async function viewChat(convId) {
             try {
-                currentChatFile = filename;
-                const data = await api('GET', `/api/admin/chats/${filename}`);
+                currentConvId = convId;
+                const data = await api('GET', `/api/admin/chats/${convId}`);
                 currentChatReviewed = data._reviewed || false;
                 updateReviewBtn();
 
@@ -441,8 +439,11 @@
                 detail.style.display = 'block';
                 const content = document.getElementById('chatDetailContent');
 
-                let headerHtml = '<p style="color:#8892b0;margin-bottom:1rem;font-size:0.85rem;">User: <strong style="color:#fff;">' + esc(data.userId) + '</strong> | Date: ' + esc(data.date) + ' | Messages: ' + data.messages.length;
-                if (data._reviewed) headerHtml += ' | <span class="badge badge-authentik">Reviewed by ' + esc(data._reviewedBy || '?') + '</span>';
+                let headerHtml = '<p style="color:#8892b0;margin-bottom:1rem;font-size:0.85rem;">User: <strong style="color:#fff;">' + esc(data.userId) + '</strong>';
+                if (data.title) headerHtml += ' | Title: <strong style="color:#fff;">' + esc(data.title) + '</strong>';
+                headerHtml += ' | Date: ' + esc(data.date || '?') + ' | Messages: ' + data.messages.length;
+                if (data._reviewed) headerHtml += ' | <span class="badge badge-authentik">Reviewed by ' + esc(data._reviewerName || data._reviewedBy || '?') + '</span>';
+                if (data._reviewNotes) headerHtml += '<br><span style="color:#ffa500;font-size:0.8rem;">Notes: ' + esc(data._reviewNotes) + '</span>';
                 headerHtml += '</p>';
                 content.innerHTML = headerHtml;
 
@@ -475,7 +476,7 @@
         function backToChats() {
             document.getElementById('chatDetail').style.display = 'none';
             document.getElementById('chatsList').style.display = 'block';
-            currentChatFile = null;
+            currentConvId = null;
             loadChats();
         }
 
@@ -491,15 +492,18 @@
         }
 
         async function toggleReview() {
-            if (!currentChatFile) return;
+            if (!currentConvId) return;
             try {
-                await api('PATCH', `/api/admin/chats/${currentChatFile}/review`, { reviewed: !currentChatReviewed });
+                const reviewerName = currentUser ? (currentUser.name || currentUser.email) : 'Admin';
+                await api('PATCH', `/api/admin/chats/${currentConvId}/review`, {
+                    reviewed: !currentChatReviewed,
+                    reviewerName: reviewerName,
+                });
                 currentChatReviewed = !currentChatReviewed;
                 updateReviewBtn();
             } catch (err) { alert(err.message); }
         }
 
-        // ── Escalations ──────────────────────────────────
         async function loadEscalations() {
             try {
                 const data = await api('GET', '/api/admin/escalations');
@@ -520,7 +524,6 @@
             } catch (err) { console.error(err); }
         }
 
-        // ── Init ─────────────────────────────────────────
         Promise.all([loadMe(), loadAuthInfo()])
             .then(loadUsers)
             .catch(() => window.location.href = '/login');

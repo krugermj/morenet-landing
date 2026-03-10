@@ -555,38 +555,92 @@ async function callLLM(messages, tools) {
   return res.json();
 }
 
-// In-memory conversation context (for LLM multi-turn)
+// In-memory conversation context (for LLM multi-turn), keyed by conversationId
 const chatContext = new Map();
 const MAX_CONTEXT = 30;
 
+// ── User Chat Endpoints ─────────────────────────────────
+
+// List user's conversations
+app.get('/api/chat/conversations', apiAuthMiddleware, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const conversations = await db.listConversations(req.user.email, limit);
+    res.json(conversations);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Get conversation history (user can only access own conversations)
+app.get('/api/chat/history/:conversationId', apiAuthMiddleware, async (req, res) => {
+  try {
+    const convId = req.params.conversationId;
+    const owner = await db.getConversationOwner(convId);
+    if (!owner || owner !== req.user.email) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    const messages = await db.getConversationMessages(convId);
+    res.json({ conversationId: convId, messages });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Delete a conversation
+app.delete('/api/chat/conversations/:conversationId', apiAuthMiddleware, async (req, res) => {
+  try {
+    const convId = req.params.conversationId;
+    const owner = await db.getConversationOwner(convId);
+    if (!owner || owner !== req.user.email) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    chatContext.delete(convId);
+    await db.deleteConversation(convId);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Main chat endpoint — now conversation-aware
 app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
   if (!OPENROUTER_API_KEY) {
     return res.status(503).json({ error: 'Chat not configured (missing API key)' });
   }
 
-  const { message } = req.body;
+  const { message, conversationId: reqConvId } = req.body;
   if (!message || typeof message !== 'string' || message.length > 4000) {
     return res.status(400).json({ error: 'Message required (max 4000 chars)' });
-  }
-
-  // Handle reset command
-  if (message === '/reset') {
-    chatContext.delete(req.user.email);
-    return res.json({ reply: 'Conversation reset.' });
   }
 
   const userId = req.user.email;
   const userName = req.user.name || userId;
 
-  // Load/init context
-  if (!chatContext.has(userId)) chatContext.set(userId, []);
-  const context = chatContext.get(userId);
+  // Handle reset command — clear context, don't create conversation
+  if (message === '/reset') {
+    if (reqConvId) chatContext.delete(reqConvId);
+    return res.json({ reply: 'Conversation reset.', conversationId: null });
+  }
+
+  // Resolve or create conversation
+  let conversationId = reqConvId;
+  let isNewConversation = false;
+  if (!conversationId) {
+    conversationId = crypto.randomUUID();
+    await db.createConversation(conversationId, userId, userName);
+    isNewConversation = true;
+  } else {
+    // Verify ownership
+    const owner = await db.getConversationOwner(conversationId);
+    if (!owner || owner !== userId) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+  }
+
+  // Load/init in-memory context for this conversation
+  if (!chatContext.has(conversationId)) chatContext.set(conversationId, []);
+  const context = chatContext.get(conversationId);
 
   context.push({ role: 'user', content: message });
   if (context.length > MAX_CONTEXT) context.splice(0, context.length - MAX_CONTEXT);
 
   // Persist user message
-  await db.saveChatMessage({ userEmail: userId, userName, role: 'user', content: message });
+  await db.saveChatMessage({ userEmail: userId, userName, role: 'user', content: message, conversationId });
 
   const messages = [
     { role: 'system', content: SHERPA_SYSTEM },
@@ -610,7 +664,7 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
         for (const tc of msg.tool_calls) {
           let args = {};
           try { args = JSON.parse(tc.function.arguments || '{}'); } catch {}
-          console.log(`Sherpa tool: ${tc.function.name}(${JSON.stringify(args)}) [user: ${userId}]`);
+          console.log(`Sherpa tool: ${tc.function.name}(${JSON.stringify(args)}) [user: ${userId}, conv: ${conversationId}]`);
 
           // Add user context to escalations
           if (tc.function.name === 'escalate') {
@@ -625,6 +679,7 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
           await db.saveChatMessage({
             userEmail: userId, userName, role: 'tool',
             toolName: tc.function.name, toolArgs: args, toolResult: result.substring(0, 4000),
+            conversationId,
           });
         }
         attempts++;
@@ -637,17 +692,23 @@ app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
       if (context.length > MAX_CONTEXT) context.splice(0, context.length - MAX_CONTEXT);
 
       // Persist assistant response
-      await db.saveChatMessage({ userEmail: userId, userName, role: 'assistant', content: reply, model: SHERPA_MODEL });
+      await db.saveChatMessage({ userEmail: userId, userName, role: 'assistant', content: reply, model: SHERPA_MODEL, conversationId });
 
-      return res.json({ reply });
+      // Auto-title: after first assistant reply in a new conversation
+      if (isNewConversation) {
+        const title = message.length > 60 ? message.substring(0, 57) + '...' : message;
+        await db.updateConversationTitle(conversationId, title);
+      }
+
+      return res.json({ reply, conversationId });
     }
 
     const fallback = 'I hit my tool usage limit for this question. Try rephrasing or I can escalate this for you.';
-    await db.saveChatMessage({ userEmail: userId, userName, role: 'assistant', content: fallback });
-    return res.json({ reply: fallback });
+    await db.saveChatMessage({ userEmail: userId, userName, role: 'assistant', content: fallback, conversationId });
+    return res.json({ reply: fallback, conversationId });
   } catch (err) {
     console.error('Sherpa error:', err.message);
-    await db.saveChatMessage({ userEmail: userId, userName, role: 'error', content: err.message }).catch(() => {});
+    await db.saveChatMessage({ userEmail: userId, userName, role: 'error', content: err.message, conversationId }).catch(() => {});
     return res.status(500).json({ error: 'Sherpa encountered an error. Please try again.' });
   }
 });
@@ -661,24 +722,30 @@ app.get('/api/admin/chats', apiAuthMiddleware, adminMiddleware, async (req, res)
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/admin/chats/:chatKey', apiAuthMiddleware, adminMiddleware, async (req, res) => {
+app.get('/api/admin/chats/:conversationId', apiAuthMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const chatKey = req.params.chatKey.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const data = await db.getChatDetail(chatKey);
+    const convId = req.params.conversationId;
+    const data = await db.getChatDetail(convId);
     if (!data || data.messages.length === 0) return res.status(404).json({ error: 'Chat not found' });
-    const meta = await db.getChatMeta(chatKey);
+    const meta = await db.getChatMeta(convId);
     data._reviewed = meta?.reviewed || false;
     data._reviewedBy = meta?.reviewed_by || null;
+    data._reviewerName = meta?.reviewer_name || null;
     data._reviewedAt = meta?.reviewed_at || null;
+    data._reviewNotes = meta?.review_notes || null;
     res.json(data);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.patch('/api/admin/chats/:chatKey/review', apiAuthMiddleware, adminMiddleware, async (req, res) => {
+app.patch('/api/admin/chats/:conversationId/review', apiAuthMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const chatKey = req.params.chatKey.replace(/[^a-zA-Z0-9@._-]/g, '');
-    const { reviewed } = req.body;
-    await db.setChatMeta(chatKey, { reviewed: !!reviewed, reviewedBy: req.user.email });
+    const convId = req.params.conversationId;
+    const { reviewed, reviewerName } = req.body;
+    await db.setChatMeta(convId, {
+      reviewed: !!reviewed,
+      reviewedBy: req.user.email,
+      reviewerName: reviewerName || req.user.name || req.user.email,
+    });
     res.json({ success: true, reviewed: !!reviewed });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -727,6 +794,28 @@ function internalApiAuth(req, res, next) {
   }
   next();
 }
+
+// ── Internal Review Endpoints (for automated NEX cron) ──
+app.get('/api/internal/unreviewed', internalApiAuth, async (req, res) => {
+  try {
+    const conversations = await db.listUnreviewedConversations();
+    res.json(conversations);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/internal/review', internalApiAuth, async (req, res) => {
+  try {
+    const { conversationId, reviewed, reviewerName, reviewNotes } = req.body;
+    if (!conversationId) return res.status(400).json({ error: 'conversationId required' });
+    await db.setChatMeta(conversationId, {
+      reviewed: reviewed !== false,
+      reviewedBy: 'internal-api',
+      reviewerName: reviewerName || 'NEX (automated)',
+      reviewNotes: reviewNotes || null,
+    });
+    res.json({ success: true, conversationId, reviewed: reviewed !== false });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // Read-only DB query endpoint
 app.post('/api/internal/query', internalApiAuth, async (req, res) => {
