@@ -61,7 +61,6 @@ async function initDB() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_chat_user_date ON chat_messages(user_email, chat_date);
-      CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_messages(conversation_id);
 
       CREATE TABLE IF NOT EXISTS escalations (
         id TEXT PRIMARY KEY,
@@ -80,25 +79,22 @@ async function initDB() {
         review_notes TEXT,
         reviewed_at TIMESTAMPTZ
       );
-      CREATE INDEX IF NOT EXISTS idx_chat_meta_conv ON chat_meta(conversation_id);
     `);
 
-    // Migration: add conversation_id column if missing (for existing installs)
-    await client.query(`
-      DO $$ BEGIN
-        ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS conversation_id TEXT;
-      EXCEPTION WHEN duplicate_column THEN NULL;
-      END $$;
-    `).catch(() => {});
+    // Migration: add columns if missing (for existing installs)
+    const migrations = [
+      'ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS conversation_id TEXT',
+      'ALTER TABLE chat_meta ADD COLUMN IF NOT EXISTS conversation_id TEXT',
+      'ALTER TABLE chat_meta ADD COLUMN IF NOT EXISTS reviewer_name TEXT',
+      'ALTER TABLE chat_meta ADD COLUMN IF NOT EXISTS review_notes TEXT',
+    ];
+    for (const sql of migrations) {
+      await client.query(sql).catch(() => {});
+    }
 
-    await client.query(`
-      DO $$ BEGIN
-        ALTER TABLE chat_meta ADD COLUMN IF NOT EXISTS conversation_id TEXT;
-        ALTER TABLE chat_meta ADD COLUMN IF NOT EXISTS reviewer_name TEXT;
-        ALTER TABLE chat_meta ADD COLUMN IF NOT EXISTS review_notes TEXT;
-      EXCEPTION WHEN duplicate_column THEN NULL;
-      END $$;
-    `).catch(() => {});
+    // Create indexes after columns exist
+    await client.query('CREATE INDEX IF NOT EXISTS idx_chat_conversation ON chat_messages(conversation_id)').catch(() => {});
+    await client.query('CREATE INDEX IF NOT EXISTS idx_chat_meta_conv ON chat_meta(conversation_id)').catch(() => {});
 
     console.log('Database tables initialized.');
   } finally {
