@@ -87,10 +87,13 @@ def cmd_client(args):
             c.id, c.company_name, c.name, c.email, c.mobile, c.telephone,
             c.billing_account_number, c.payment_method, c.stop_supply, c.stop_invoicing,
             c.billing_date, c.terms, c.admin_fees, c.interest_exempt,
+            c.`group` as customer_group,
+            sg.name as sales_group,
             (SELECT COUNT(*) FROM invoices i WHERE i.customer_id = c.id AND i.deleted_at IS NULL) as total_invoices,
             (SELECT SUM(i.outstanding) FROM invoices i WHERE i.customer_id = c.id AND i.deleted_at IS NULL AND i.outstanding > 0) as total_outstanding,
             (SELECT SUM(i.total) FROM invoices i WHERE i.customer_id = c.id AND i.deleted_at IS NULL AND i.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)) as revenue_12m
         FROM customers c
+        LEFT JOIN sales_groups sg ON c.sales_group_id = sg.id
         WHERE c.deleted_at IS NULL 
           AND (c.company_name LIKE '%{name}%' OR c.name LIKE '%{name}%' OR c.billing_account_number LIKE '%{name}%')
         LIMIT 10
@@ -144,6 +147,8 @@ def cmd_client(args):
             "mobile": client.get("mobile", ""),
             "telephone": client.get("telephone", ""),
             "account_number": client.get("billing_account_number", ""),
+            "sales_group": client.get("sales_group") or None,
+            "customer_group": client.get("customer_group") or None,
             "payment_method": client.get("payment_method", ""),
             "stop_supply": bool(client.get("stop_supply")),
             "stop_invoicing": bool(client.get("stop_invoicing")),
@@ -246,8 +251,10 @@ def cmd_search(args):
     query = sql_escape(args.query)
     cols, rows = run_sql(f"""
         SELECT c.id, c.company_name, c.name, c.email, c.mobile, 
-               c.billing_account_number, c.stop_supply, c.payment_method
+               c.billing_account_number, c.stop_supply, c.payment_method,
+               c.`group` as customer_group, sg.name as sales_group
         FROM customers c
+        LEFT JOIN sales_groups sg ON c.sales_group_id = sg.id
         WHERE c.deleted_at IS NULL
           AND (c.company_name LIKE '%{query}%' OR c.name LIKE '%{query}%' 
                OR c.billing_account_number LIKE '%{query}%' OR c.email LIKE '%{query}%')
