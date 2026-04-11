@@ -398,7 +398,7 @@ const SHERPA_SYSTEM = `You are NEX, a client insights specialist for MoreNET / I
 
 ## Your Systems
 1. **Zammad** — helpdesk tickets, customer profiles, queue stats, agent workloads
-2. **Billing (MetaBase)** — client financials: invoices, payments, outstanding balances, services, annuities
+2. **Billing (MetaBase)** — client financials: invoices, payments, outstanding balances, services, annuities, AND aggregate stats (revenue trends, monthly client counts, MRC totals)
 3. **XWiki** — internal documentation, client notes, technical procedures, AND client listings organized by building/estate/location (e.g. "Mzuri Estate > Customers > Client Name")
 4. **Escalate** — flag for senior support when you can't answer
 
@@ -407,6 +407,8 @@ When asked about a person, customer, or company, **ALWAYS use the client_lookup 
 - **Customer lookup** → use client_lookup (one tool call, all three systems)
 - **Ticket inquiry** → get ticket details AND look up the customer in billing for account context
 - **Building/estate/location queries** (e.g. "clients in Mzuri", "who's at Mushroom Farm") → search XWiki first (buildings and client lists are stored there)
+- **Revenue/billing stats** → use billing_revenue (monthly totals) or billing_stats (unique clients per month, MRC totals)
+- **Outstanding/arrears** → use billing_outstanding to list clients with unpaid balances
 - **General questions** → search XWiki for docs AND Zammad for related tickets
 
 DO NOT stop after querying one system. The user expects a COMPREHENSIVE answer combining data from every source.
@@ -450,6 +452,9 @@ const SHERPA_TOOLS = [
   { type: 'function', function: { name: 'billing_invoices', description: 'Get invoice history for a client. Shows recent invoices with amounts, dates, and outstanding balances.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'Client name or company' }, months: { type: 'string', description: 'Number of months to look back (default 6)' } }, required: ['name'] } } },
   { type: 'function', function: { name: 'billing_annuity', description: 'Get recurring billing (MRC/monthly services) for a client. Shows active subscriptions and monthly charges.', parameters: { type: 'object', properties: { name: { type: 'string', description: 'Client name or company' } }, required: ['name'] } } },
   { type: 'function', function: { name: 'billing_search', description: 'Search billing system for clients by name, company, or account number. Use for finding the right client when you have partial info.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'billing_revenue', description: 'Get monthly revenue summary: total revenue, invoice counts, collected vs outstanding by month. Use for "how much revenue last month", "monthly billing totals", "revenue trend" questions.', parameters: { type: 'object', properties: { months: { type: 'string', description: 'Number of months to look back (default 12)' } } } } },
+  { type: 'function', function: { name: 'billing_outstanding', description: 'List all clients with outstanding (unpaid) balances. Use for "who owes money", "outstanding accounts", "clients with arrears" questions.', parameters: { type: 'object', properties: { min: { type: 'string', description: 'Minimum outstanding amount in Rands (default 0)' } } } } },
+  { type: 'function', function: { name: 'billing_stats', description: 'Aggregate monthly billing statistics: unique clients invoiced per month, total MRC (recurring) clients, total active customers. Use for "how many clients invoiced per month", "total MRC clients", "billing stats" questions.', parameters: { type: 'object', properties: { months: { type: 'string', description: 'Number of months of invoice history (default 12)' } } } } },
   { type: 'function', function: { name: 'escalate', description: 'Escalate a question or request to the senior NEX orchestrator for help. Use when you cannot answer, need an action performed, or need human judgment.', parameters: { type: 'object', properties: { reason: { type: 'string', description: 'What the user needs and why you are escalating' }, context: { type: 'string', description: 'Relevant context: ticket numbers, customer info, what you already tried' } }, required: ['reason'] } } },
 ];
 
@@ -482,6 +487,21 @@ const TOOL_COMMANDS = {
   },
   billing_annuity: (args) => ['python3', path.join(__dirname, 'metabase.py'), 'annuity', args.name || ''],
   billing_search: (args) => ['python3', path.join(__dirname, 'metabase.py'), 'search', args.query || ''],
+  billing_revenue: (args) => {
+    const cmd = ['python3', path.join(__dirname, 'metabase.py'), 'revenue'];
+    if (args.months) cmd.push('--months', String(args.months));
+    return cmd;
+  },
+  billing_outstanding: (args) => {
+    const cmd = ['python3', path.join(__dirname, 'metabase.py'), 'outstanding'];
+    if (args.min) cmd.push('--min', String(args.min));
+    return cmd;
+  },
+  billing_stats: (args) => {
+    const cmd = ['python3', path.join(__dirname, 'metabase.py'), 'stats'];
+    if (args.months) cmd.push('--months', String(args.months));
+    return cmd;
+  },
 };
 
 function executeTool(name, args) {

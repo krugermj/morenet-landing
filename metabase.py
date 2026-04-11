@@ -10,6 +10,7 @@ Commands:
   revenue [--months N]       - Revenue summary (default 12 months)
   annuity <name>             - Recurring billing (MRC) for a client
   search <query>             - Search clients by name, company, or account number
+  stats [--months N]         - Aggregate monthly stats: unique clients invoiced, MRC totals
   sql <query>                - Run a raw SQL query (read-only)
   dashboards                 - List available MetaBase dashboards
   cards                      - List available saved questions/cards
@@ -267,6 +268,48 @@ def cmd_search(args):
         return
     print(json.dumps({"status": "OK", "clients": results, "count": len(results)}, indent=2, default=str))
 
+def cmd_stats(args):
+    """Aggregate monthly billing stats: unique clients invoiced and on annuity/MRC."""
+    months = int(args.months or 12)
+    # Monthly unique invoiced clients
+    inv_cols, inv_rows = run_sql(f"""
+        SELECT DATE_FORMAT(i.date, '%Y-%m') as month,
+               COUNT(DISTINCT i.customer_id) as unique_clients_invoiced,
+               COUNT(i.id) as total_invoices,
+               SUM(i.total)/100.0 as total_revenue_rands,
+               SUM(i.outstanding)/100.0 as total_outstanding_rands
+        FROM invoices i
+        WHERE i.deleted_at IS NULL AND i.date >= DATE_SUB(CURDATE(), INTERVAL {months} MONTH)
+        GROUP BY month
+        ORDER BY month DESC
+    """)
+    invoiced = [dict(zip(inv_cols, r)) for r in inv_rows]
+
+    # Monthly unique annuity clients (active MRC subscriptions)
+    ann_cols, ann_rows = run_sql(f"""
+        SELECT DATE_FORMAT(CURDATE(), '%Y-%m') as month,
+               COUNT(DISTINCT a.customer_id) as unique_clients_on_mrc,
+               SUM(ai.price * ai.quantity)/100.0 as total_mrc_rands
+        FROM annuity_items ai
+        JOIN annuities a ON ai.annuity_id = a.id
+        JOIN customers c ON a.customer_id = c.id
+        WHERE ai.deleted_at IS NULL AND a.deleted_at IS NULL AND c.deleted_at IS NULL
+    """)
+    annuity = [dict(zip(ann_cols, r)) for r in ann_rows]
+
+    # Current totals
+    tot_cols, tot_rows = run_sql("""
+        SELECT COUNT(*) as total_active_customers FROM customers WHERE deleted_at IS NULL
+    """)
+    total_customers = tot_rows[0][0] if tot_rows else 0
+
+    print(json.dumps({
+        "monthly_invoiced": invoiced,
+        "current_mrc": annuity,
+        "total_active_customers": total_customers,
+        "months": months
+    }, indent=2, default=str))
+
 def cmd_sql(args):
     """Run a raw SQL query (read-only)."""
     cols, rows = run_sql(args.query)
@@ -310,6 +353,9 @@ def main():
     p = sub.add_parser("search")
     p.add_argument("query")
 
+    p = sub.add_parser("stats")
+    p.add_argument("--months", type=int, default=12, help="Months of invoice history (default 12)")
+
     p = sub.add_parser("sql")
     p.add_argument("query")
 
@@ -325,7 +371,7 @@ def main():
     cmd_map = {
         "client": cmd_client, "invoices": cmd_invoices, "outstanding": cmd_outstanding,
         "revenue": cmd_revenue, "annuity": cmd_annuity, "search": cmd_search,
-        "sql": cmd_sql, "dashboards": cmd_dashboards, "cards": cmd_cards,
+        "stats": cmd_stats, "sql": cmd_sql, "dashboards": cmd_dashboards, "cards": cmd_cards,
     }
     cmd_map[args.cmd](args)
 
