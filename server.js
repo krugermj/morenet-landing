@@ -392,6 +392,7 @@ app.delete('/api/users/:id', apiAuthMiddleware, adminMiddleware, async (req, res
 // ── Sherpa Chat (AI Assistant) ────────────────────────────
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const SHERPA_MODEL = process.env.SHERPA_MODEL || 'google/gemini-2.0-flash-001';
+const LLM_BASE_URL = process.env.LLM_BASE_URL || 'https://openrouter.ai/api/v1';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '';
 
@@ -561,12 +562,14 @@ function handleEscalation(args) {
 // All chat persistence now handled by db.js
 
 async function callLLM(messages, tools) {
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const isOllama = LLM_BASE_URL.includes('11434');
+  const headers = { 'Content-Type': 'application/json' };
+  if (!isOllama && OPENROUTER_API_KEY) {
+    headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
+  }
+  const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-    },
+    headers,
     body: JSON.stringify({ model: SHERPA_MODEL, messages, tools, max_tokens: 4096 }),
   });
   if (!res.ok) {
@@ -620,8 +623,8 @@ app.delete('/api/chat/conversations/:conversationId', apiAuthMiddleware, async (
 
 // Main chat endpoint — now conversation-aware
 app.post('/api/chat', apiAuthMiddleware, async (req, res) => {
-  if (!OPENROUTER_API_KEY) {
-    return res.status(503).json({ error: 'Chat not configured (missing API key)' });
+  if (!OPENROUTER_API_KEY && !LLM_BASE_URL.includes('11434')) {
+    return res.status(503).json({ error: 'Chat not configured (missing API key and no Ollama endpoint)' });
   }
 
   const { message, conversationId: reqConvId } = req.body;
@@ -897,7 +900,7 @@ async function start() {
     await db.initDB();
     await seedAdmin();
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`NEX Portal running on port ${PORT} [auth: ${OIDC_ENABLED ? 'Authentik OIDC' : 'local'}] [storage: PostgreSQL]`);
+      console.log(`NEX Portal running on port ${PORT} [auth: ${OIDC_ENABLED ? 'Authentik OIDC' : 'local'}] [storage: PostgreSQL] [llm: ${LLM_BASE_URL} model: ${SHERPA_MODEL}]`);
     });
   } catch (err) {
     console.error('Failed to start:', err.message);
